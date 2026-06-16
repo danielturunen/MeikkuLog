@@ -568,6 +568,9 @@ const DISPOSITION_DETAILS={
   'Leikkaussalissa':['Siltasairaalan leikkuri','Tornisairaalan leikkuri'],
   'Teho-osastolla':['Teho C','Teho AB','Teho ED','Valvontaosasto M1'],
 };
+/* Raptor-hälytyksessä angio/leikkaus voidaan tehdä Raptorissa, leikkurissa tai angiosalissa */
+const RAPTOR_VENUES=['Raptor','Leikkuri','Angiosali'];
+function isRaptorType(id){ return id==='raptor_vakaa' || id==='raptor_instabiili'; }
 const STROKE_DECISIONS=['Liuotushoito','Trombektomia (EVT)','Ei liuotushoitoa','Ei trombektomiaa',
   'Seuranta','Vuoto','Ei löydöksiä','Vanha infarkti'];
 function isTraumaGroup(typeId){ return traumaTypeById(typeId).group==='Trauma'; }
@@ -1021,9 +1024,10 @@ function traumaRowHTML(t){
       <span class="td">${dl}</span></div>
     ${t.mechanism?`<div class="tmech">${esc(t.mechanism)}</div>`:''}
     ${t.injuries?`<div class="tinj">${esc(t.injuries)}</div>`:''}
-    ${(t.traumaKind||t.survived||(t.disposition&&t.disposition.length))?`<div style="margin-top:5px; display:flex; flex-wrap:wrap; gap:4px;">
+    ${(t.traumaKind||t.survived||t.raptorVenue||(t.disposition&&t.disposition.length))?`<div style="margin-top:5px; display:flex; flex-wrap:wrap; gap:4px;">
       ${t.traumaKind?`<span class="ptag">${esc(t.traumaKind)}</span>`:''}
       ${t.survived?`<span class="ptag" style="background:${t.survived==='Kyllä'?'#34d399':'#f87171'}; color:#06122b; border-color:transparent;">${t.survived==='Kyllä'?'Elossa':'Menehtyi'}</span>`:''}
+      ${t.raptorVenue?`<span class="ptag" style="background:#f9a8d4; color:#06122b; border-color:transparent;">Tmp: ${esc(t.raptorVenue)}</span>`:''}
       ${(t.disposition||[]).map(x=>{ const d=(t.dispositionDetail||{})[x]; return `<span class="ptag">${esc(x)}${d?' · '+esc(d):''}</span>`; }).join('')}
     </div>`:''}
     ${t.role?`<div class="tnote">Rooli: ${esc(t.role)}</div>`:''}
@@ -1057,11 +1061,16 @@ function buildTraumaExtra(){
   const wrap=document.getElementById('tTraumaExtra');
   if(!isTraumaGroup(traumaDraft.type)){ wrap.style.display='none'; wrap.innerHTML=''; return; }
   wrap.style.display='block';
+  const raptor=isRaptorType(traumaDraft.type);
   wrap.innerHTML=`
     <label class="fl">Trauman tyyppi</label><div class="chips" id="tKind"></div>
     <label class="fl">Jäikö henkiin</label><div class="chips" id="tSurv"></div>
+    ${raptor?`<label class="fl">Angio / leikkaus — suorituspaikka</label><div class="chips" id="tVenue"></div>`:''}
     <label class="fl">Jatkohoito</label><div class="chips" id="tDisp"></div>
     <div id="tDispDetail"></div>`;
+  if(raptor) renderChips(document.getElementById('tVenue'), RAPTOR_VENUES,
+    o=>traumaDraft.raptorVenue===o,
+    v=>{ traumaDraft.raptorVenue=(traumaDraft.raptorVenue===v?'':v); buildTraumaExtra(); });
   renderChips(document.getElementById('tKind'), TRAUMA_KINDS,
     o=>traumaDraft.traumaKind===o,
     v=>{ traumaDraft.traumaKind=(traumaDraft.traumaKind===v?'':v); buildTraumaExtra(); });
@@ -1111,7 +1120,7 @@ function openTrauma(id, returnTo){
 function openNewTrauma(pre, returnTo){
   editingTraumaId=null; traumaReturnTo=returnTo;
   traumaDraft=Object.assign({id:null, shiftId:null, date:ymd(new Date()), type:'traumahalytys',
-    age:'', mechanism:'', injuries:'', role:'', notes:'', traumaKind:'', survived:'', disposition:[], dispositionDetail:{}}, pre||{});
+    age:'', mechanism:'', injuries:'', role:'', notes:'', traumaKind:'', survived:'', disposition:[], dispositionDetail:{}, raptorVenue:''}, pre||{});
   document.getElementById('traumaTitle').textContent='Uusi potilas';
   document.getElementById('deleteTrauma').style.display='none';
   fillTraumaForm(); document.getElementById('traumaSheet').classList.add('open');
@@ -1133,6 +1142,7 @@ document.getElementById('saveTrauma').onclick=()=>{
     alert('Täytä ainakin vammamekanismi, vammat tai ikä.'); return;
   }
   if(!isTraumaGroup(traumaDraft.type)){ traumaDraft.traumaKind=''; traumaDraft.survived=''; traumaDraft.disposition=[]; traumaDraft.dispositionDetail={}; }
+  if(!isRaptorType(traumaDraft.type)) traumaDraft.raptorVenue='';
   if(traumaDraft.dispositionDetail) Object.keys(traumaDraft.dispositionDetail).forEach(k=>{ if(!(traumaDraft.disposition||[]).includes(k)) delete traumaDraft.dispositionDetail[k]; });
   if(editingTraumaId){ traumas[traumas.findIndex(t=>t.id===editingTraumaId)]=traumaDraft; }
   else { traumaDraft.id=rid(); traumaDraft.created=Date.now(); traumas.push(traumaDraft); }
