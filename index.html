@@ -169,6 +169,8 @@
   .trow:active{background:var(--card2);}
   .traumatag{display:inline-flex; align-items:center; gap:5px; font-size:11px; font-weight:800;
     color:#06122b; padding:2px 9px; border-radius:7px;}
+  .ptag{display:inline-flex; align-items:center; font-size:11px; font-weight:600; background:var(--card2);
+    border:1px solid var(--line); color:var(--text); padding:2px 8px; border-radius:7px;}
   .logmonth{font-size:12px; color:var(--muted); text-transform:capitalize; font-weight:700; margin:16px 4px 8px;}
   .traumahint{background:rgba(248,113,113,.10); border:1px solid rgba(248,113,113,.28); color:var(--text);
     border-radius:12px; padding:10px 12px; font-size:12px; line-height:1.5; margin-bottom:10px;}
@@ -308,6 +310,8 @@
     <label class="fl">Vammat / löydökset</label>
     <textarea id="tInj" placeholder="esim. rintarangan murtuma, oik. ilmarinta"></textarea>
 
+    <div id="tTraumaExtra"></div>
+
     <label class="fl">Rooli</label>
     <div class="chips" id="tRoleChips"></div>
 
@@ -336,6 +340,8 @@
       <label class="fl">Lopputulos (UÄ-kanyyli)</label>
       <div class="traumagrid" id="pOutcomeGrid"></div>
     </div>
+
+    <div id="pStrokeWrap" style="display:none;"></div>
 
     <label class="fl">Huone / sijainti</label>
     <div class="chips" id="pRoomChips"></div>
@@ -549,6 +555,22 @@ const PROC_ROOMS=[
   {id:'Muu',        label:'Muu…',        color:'#cbd5e1'},
 ];
 function procRoomById(id){ return PROC_ROOMS.find(r=>r.id===id) || locById(id) || {id:id,label:id,color:'#cbd5e1'}; }
+
+/* Kliiniset lisäkentät (sairaalan kirjausnäkymän mukaan) */
+const TRAUMA_KINDS=['Tylppä','Terävä'];
+const SURVIVED=['Kyllä','Ei'];
+const DISPOSITIONS=['Päivystyksessä','Leikkaussalissa','Hätäleikkaus','Torakotomia','Laparotomia',
+  'Lantion pakkaaminen','Raajan revaskularisaatio','Angioembolisaatio/stenttaus','Kraniotomia',
+  'ICP-mittarin asennus','Externfiksaatio','Teho-osastolla','Vuodeosastolla','Uloskirjaus','Muu'];
+const STROKE_DECISIONS=['Liuotushoito','Trombektomia (EVT)','Ei liuotushoitoa','Ei trombektomiaa',
+  'Seuranta','Vuoto','Ei löydöksiä','Vanha infarkti'];
+function isTraumaGroup(typeId){ return traumaTypeById(typeId).group==='Trauma'; }
+/* Yleinen sirupainikeryhmä */
+function renderChips(el, options, isSel, onClick, colorSel){
+  el.innerHTML=options.map(o=>{ const sel=isSel(o), col=(typeof colorSel==='function'?colorSel(o):(colorSel||'#4f8cff'));
+    return `<button class="chip ${sel?'sel':''}" data-v="${esc(o)}" style="${sel?`background:${col};color:#fff`:''}">${esc(o)}</button>`; }).join('');
+  el.querySelectorAll('.chip').forEach(b=>b.onclick=()=>onClick(b.dataset.v));
+}
 
 /* ---------- Apurit ---------- */
 const MONTHS=['tammikuu','helmikuu','maaliskuu','huhtikuu','toukokuu','kesäkuu','heinäkuu','elokuu','syyskuu','lokakuu','marraskuu','joulukuu'];
@@ -993,6 +1015,11 @@ function traumaRowHTML(t){
       <span class="td">${dl}</span></div>
     ${t.mechanism?`<div class="tmech">${esc(t.mechanism)}</div>`:''}
     ${t.injuries?`<div class="tinj">${esc(t.injuries)}</div>`:''}
+    ${(t.traumaKind||t.survived||(t.disposition&&t.disposition.length))?`<div style="margin-top:5px; display:flex; flex-wrap:wrap; gap:4px;">
+      ${t.traumaKind?`<span class="ptag">${esc(t.traumaKind)}</span>`:''}
+      ${t.survived?`<span class="ptag" style="background:${t.survived==='Kyllä'?'#34d399':'#f87171'}; color:#06122b; border-color:transparent;">${t.survived==='Kyllä'?'Elossa':'Menehtyi'}</span>`:''}
+      ${(t.disposition||[]).map(x=>`<span class="ptag">${esc(x)}</span>`).join('')}
+    </div>`:''}
     ${t.role?`<div class="tnote">Rooli: ${esc(t.role)}</div>`:''}
     ${t.notes?`<div class="tnote">${esc(t.notes)}</div>`:''}
   </div>`;
@@ -1016,9 +1043,28 @@ function buildTraumaTypeGrid(){
     const b=document.createElement('button');
     b.className='ttbtn'+(traumaDraft.type===t.id?' sel':'');
     b.innerHTML=`<span class="dot" style="background:${t.color}"></span>${t.label}`;
-    b.onclick=()=>{ traumaDraft.type=t.id; buildTraumaTypeGrid(); };
+    b.onclick=()=>{ traumaDraft.type=t.id; buildTraumaTypeGrid(); buildTraumaExtra(); };
     g.appendChild(b);
   });
+}
+function buildTraumaExtra(){
+  const wrap=document.getElementById('tTraumaExtra');
+  if(!isTraumaGroup(traumaDraft.type)){ wrap.style.display='none'; wrap.innerHTML=''; return; }
+  wrap.style.display='block';
+  wrap.innerHTML=`
+    <label class="fl">Trauman tyyppi</label><div class="chips" id="tKind"></div>
+    <label class="fl">Jäikö henkiin</label><div class="chips" id="tSurv"></div>
+    <label class="fl">Jatkohoito</label><div class="chips" id="tDisp"></div>`;
+  renderChips(document.getElementById('tKind'), TRAUMA_KINDS,
+    o=>traumaDraft.traumaKind===o,
+    v=>{ traumaDraft.traumaKind=(traumaDraft.traumaKind===v?'':v); buildTraumaExtra(); });
+  renderChips(document.getElementById('tSurv'), SURVIVED,
+    o=>traumaDraft.survived===o,
+    v=>{ traumaDraft.survived=(traumaDraft.survived===v?'':v); buildTraumaExtra(); },
+    o=>o==='Kyllä'?'#34d399':'#f87171');
+  renderChips(document.getElementById('tDisp'), DISPOSITIONS,
+    o=>(traumaDraft.disposition||[]).includes(o),
+    v=>{ const a=traumaDraft.disposition||(traumaDraft.disposition=[]); const i=a.indexOf(v); if(i<0)a.push(v); else a.splice(i,1); buildTraumaExtra(); });
 }
 function buildTraumaRoleChips(){
   const c=document.getElementById('tRoleChips');
@@ -1034,7 +1080,7 @@ function fillTraumaForm(){
   document.getElementById('tInj').value=traumaDraft.injuries||'';
   document.getElementById('tNotes').value=traumaDraft.notes||'';
   traumaDraft.role=canonRole(traumaDraft.role);
-  buildTraumaTypeGrid(); buildTraumaRoleChips();
+  buildTraumaTypeGrid(); buildTraumaRoleChips(); buildTraumaExtra();
 }
 function openTrauma(id, returnTo){
   editingTraumaId=id; traumaReturnTo=returnTo;
@@ -1046,7 +1092,7 @@ function openTrauma(id, returnTo){
 function openNewTrauma(pre, returnTo){
   editingTraumaId=null; traumaReturnTo=returnTo;
   traumaDraft=Object.assign({id:null, shiftId:null, date:ymd(new Date()), type:'traumahalytys',
-    age:'', mechanism:'', injuries:'', role:'', notes:''}, pre||{});
+    age:'', mechanism:'', injuries:'', role:'', notes:'', traumaKind:'', survived:'', disposition:[]}, pre||{});
   document.getElementById('traumaTitle').textContent='Uusi potilas';
   document.getElementById('deleteTrauma').style.display='none';
   fillTraumaForm(); document.getElementById('traumaSheet').classList.add('open');
@@ -1067,6 +1113,7 @@ document.getElementById('saveTrauma').onclick=()=>{
   if(!traumaDraft.mechanism && !traumaDraft.injuries && !traumaDraft.age && !traumaDraft.notes){
     alert('Täytä ainakin vammamekanismi, vammat tai ikä.'); return;
   }
+  if(!isTraumaGroup(traumaDraft.type)){ traumaDraft.traumaKind=''; traumaDraft.survived=''; traumaDraft.disposition=[]; }
   if(editingTraumaId){ traumas[traumas.findIndex(t=>t.id===editingTraumaId)]=traumaDraft; }
   else { traumaDraft.id=rid(); traumaDraft.created=Date.now(); traumas.push(traumaDraft); }
   saveTraumas(); closeTrauma();
@@ -1168,6 +1215,38 @@ function renderPatientLog(){
         <span class="mt"><b>${n}</b> vuoroa</span></div>
         <div class="bar"><i style="width:${Math.max(3,Math.round(n/maxRole*100))}%;background:${roleCol[r]}"></i></div></div>`; });
     st+='<div class="hint" style="margin-top:4px;">AMBreboa osallistuu vain Raptor-hälytyksiin, jotka ovat myös traumahälytyksiä.</div>';
+
+    /* tylppä vs. terävä */
+    const kc={}; alerts.forEach(t=>{ if(t.traumaKind) kc[t.traumaKind]=(kc[t.traumaKind]||0)+1; });
+    if(Object.keys(kc).length){
+      const kk=[['Tylppä','#a5b4fc'],['Terävä','#f87171']];
+      const maxK=Math.max.apply(null, kk.map(x=>kc[x[0]]||0).concat([1]));
+      st+='<div class="s-section">Tylppä vs. terävä</div>';
+      kk.forEach(x=>{ const n=kc[x[0]]||0; st+=`<div class="brow"><div class="l1">
+        <span class="codepill" style="background:${x[1]}">${x[0]}</span><span class="nm"></span>
+        <span class="mt"><b>${n}</b> kpl</span></div>
+        <div class="bar"><i style="width:${Math.max(3,Math.round(n/maxK*100))}%;background:${x[1]}"></i></div></div>`; });
+    }
+
+    /* selviytyminen */
+    const sv={}; alerts.forEach(t=>{ if(t.survived) sv[t.survived]=(sv[t.survived]||0)+1; });
+    const svTot=(sv['Kyllä']||0)+(sv['Ei']||0);
+    if(svTot){
+      st+='<div class="s-section">Selviytyminen</div><div class="tilegrid">'
+        + tile(sv['Kyllä']||0,'Elossa') + tile(sv['Ei']||0,'Menehtyi')
+        + tile(Math.round((sv['Kyllä']||0)/svTot*100)+' %','Eloonjäänti') + '</div>';
+    }
+
+    /* jatkohoito */
+    const dp={}; alerts.forEach(t=>(t.disposition||[]).forEach(x=>dp[x]=(dp[x]||0)+1));
+    const dRows=Object.keys(dp).map(x=>({x,n:dp[x]})).sort((a,b)=>b.n-a.n);
+    if(dRows.length){
+      const maxDp=Math.max.apply(null, dRows.map(r=>r.n).concat([1]));
+      st+='<div class="s-section">Jatkohoito</div>';
+      dRows.forEach(r=>{ st+=`<div class="brow"><div class="l1">
+        <span class="nm">${esc(r.x)}</span><span class="mt"><b>${r.n}</b> kpl</span></div>
+        <div class="bar"><i style="width:${Math.max(3,Math.round(r.n/maxDp*100))}%;background:#4f8cff"></i></div></div>`; });
+    }
   }
 
   st+='<div class="s-section">Kirjaukset</div>';
@@ -1202,6 +1281,8 @@ function procRowHTML(p){
       ${p.room?`<span class="tage">${esc(procRoomById(p.room).label)}</span>`:''}
       <span class="td">${dl}</span></div>
     ${oc?`<div style="margin:2px 0 4px;"><span class="traumatag" style="background:${oc.color}">${oc.label}</span></div>`:''}
+    ${(p.strokeDecision&&p.strokeDecision.length)?`<div style="margin:3px 0 4px; display:flex; flex-wrap:wrap; gap:4px;">
+      ${p.strokeDecision.map(x=>`<span class="ptag">${esc(x)}</span>`).join('')}</div>`:''}
     ${p.notes?`<div class="tinj">${esc(p.notes)}</div>`:''}
   </div>`;
 }
@@ -1221,9 +1302,18 @@ function buildProcTypeGrid(){
     b.innerHTML=`<span class="dot" style="background:${p.color}"></span>${p.label}`;
     b.onclick=()=>{ procDraft.type=p.id;
       if(!procTypeById(p.id).cannula) procDraft.outcome=''; else if(!procDraft.outcome) procDraft.outcome='ua_tarvittu';
-      buildProcTypeGrid(); buildProcOutcome(); };
+      buildProcTypeGrid(); buildProcOutcome(); buildProcStroke(); };
     g.appendChild(b);
   });
+}
+function buildProcStroke(){
+  const wrap=document.getElementById('pStrokeWrap');
+  if(procDraft.type!=='stroke'){ wrap.style.display='none'; wrap.innerHTML=''; return; }
+  wrap.style.display='block';
+  wrap.innerHTML='<label class="fl">Hoitopäätös / löydös</label><div class="chips" id="pStroke"></div>';
+  renderChips(document.getElementById('pStroke'), STROKE_DECISIONS,
+    o=>(procDraft.strokeDecision||[]).includes(o),
+    v=>{ const a=procDraft.strokeDecision||(procDraft.strokeDecision=[]); const i=a.indexOf(v); if(i<0)a.push(v); else a.splice(i,1); buildProcStroke(); });
 }
 function buildProcOutcome(){
   const wrap=document.getElementById('pOutcomeWrap'), g=document.getElementById('pOutcomeGrid');
@@ -1248,7 +1338,7 @@ function buildProcRoomChips(){
 function fillProcForm(){
   document.getElementById('pDate').value=procDraft.date;
   document.getElementById('pNotes').value=procDraft.notes||'';
-  buildProcTypeGrid(); buildProcOutcome(); buildProcRoomChips();
+  buildProcTypeGrid(); buildProcOutcome(); buildProcStroke(); buildProcRoomChips();
 }
 function openProc(id, returnTo){
   editingProcId=id; procReturnTo=returnTo;
@@ -1259,7 +1349,7 @@ function openProc(id, returnTo){
 }
 function openNewProc(pre, returnTo){
   editingProcId=null; procReturnTo=returnTo;
-  procDraft=Object.assign({id:null, shiftId:null, date:ymd(new Date()), type:'intubaatio', room:'H2', outcome:'', notes:''}, pre||{});
+  procDraft=Object.assign({id:null, shiftId:null, date:ymd(new Date()), type:'intubaatio', room:'H2', outcome:'', strokeDecision:[], notes:''}, pre||{});
   document.getElementById('procTitle').textContent='Uusi toimenpide';
   document.getElementById('deleteProc').style.display='none';
   fillProcForm(); document.getElementById('procSheet').classList.add('open');
@@ -1275,6 +1365,7 @@ document.getElementById('saveProc').onclick=()=>{
   procDraft.date=document.getElementById('pDate').value||procDraft.date;
   procDraft.notes=document.getElementById('pNotes').value.trim();
   if(!procTypeById(procDraft.type).cannula) procDraft.outcome='';
+  if(procDraft.type!=='stroke') procDraft.strokeDecision=[];
   if(editingProcId){ procs[procs.findIndex(p=>p.id===editingProcId)]=procDraft; }
   else { procDraft.id=rid(); procDraft.created=Date.now(); procs.push(procDraft); }
   saveProcs(); closeProc();
@@ -1357,6 +1448,22 @@ function renderProcLog(){
         <span class="mt">UÄ <b>${x.ua}</b> / ${x.n} kpl${x.fail?` · ei onnist. ${x.fail}`:''}</span></div>
         <div class="bar"><i style="width:${Math.max(3,Math.round(x.ua/maxUa*100))}%;background:#34d399"></i></div></div>`; });
   }
+
+  /* STROKE — hoitopäätökset */
+  const strokes=all.filter(p=>p.type==='stroke');
+  if(strokes.length){
+    const sd={}; strokes.forEach(p=>(p.strokeDecision||[]).forEach(x=>sd[x]=(sd[x]||0)+1));
+    const sRows=Object.keys(sd).map(x=>({x,n:sd[x]})).sort((a,b)=>b.n-a.n);
+    st+='<div class="s-section">STROKE — hoitopäätökset</div>';
+    st+=`<div class="hint" style="margin-top:0;">${strokes.length} STROKE-hälytystä kirjattu.</div>`;
+    if(sRows.length){
+      const maxS=Math.max.apply(null, sRows.map(r=>r.n).concat([1]));
+      sRows.forEach(r=>{ st+=`<div class="brow"><div class="l1">
+        <span class="nm">${esc(r.x)}</span><span class="mt"><b>${r.n}</b> kpl</span></div>
+        <div class="bar"><i style="width:${Math.max(3,Math.round(r.n/maxS*100))}%;background:#a5b4fc"></i></div></div>`; });
+    }
+  }
+
   st+='<div class="s-section">Kirjaukset</div>';
   stats.innerHTML=st;
 
