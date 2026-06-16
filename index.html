@@ -562,6 +562,12 @@ const SURVIVED=['Kyllä','Ei'];
 const DISPOSITIONS=['Päivystyksessä','Leikkaussalissa','Hätäleikkaus','Torakotomia','Laparotomia',
   'Lantion pakkaaminen','Raajan revaskularisaatio','Angioembolisaatio/stenttaus','Kraniotomia',
   'ICP-mittarin asennus','Externfiksaatio','Teho-osastolla','Vuodeosastolla','Uloskirjaus','Muu'];
+/* Tietyille jatkohoidoille tarkentava lisävalinta */
+const DISPOSITION_DETAILS={
+  'Päivystyksessä':['Valvontahuone','Peruskenttä'],
+  'Leikkaussalissa':['Siltasairaalan leikkuri','Tornisairaalan leikkuri'],
+  'Teho-osastolla':['Teho C','Teho AB','Teho ED','Valvontaosasto M1'],
+};
 const STROKE_DECISIONS=['Liuotushoito','Trombektomia (EVT)','Ei liuotushoitoa','Ei trombektomiaa',
   'Seuranta','Vuoto','Ei löydöksiä','Vanha infarkti'];
 function isTraumaGroup(typeId){ return traumaTypeById(typeId).group==='Trauma'; }
@@ -1018,7 +1024,7 @@ function traumaRowHTML(t){
     ${(t.traumaKind||t.survived||(t.disposition&&t.disposition.length))?`<div style="margin-top:5px; display:flex; flex-wrap:wrap; gap:4px;">
       ${t.traumaKind?`<span class="ptag">${esc(t.traumaKind)}</span>`:''}
       ${t.survived?`<span class="ptag" style="background:${t.survived==='Kyllä'?'#34d399':'#f87171'}; color:#06122b; border-color:transparent;">${t.survived==='Kyllä'?'Elossa':'Menehtyi'}</span>`:''}
-      ${(t.disposition||[]).map(x=>`<span class="ptag">${esc(x)}</span>`).join('')}
+      ${(t.disposition||[]).map(x=>{ const d=(t.dispositionDetail||{})[x]; return `<span class="ptag">${esc(x)}${d?' · '+esc(d):''}</span>`; }).join('')}
     </div>`:''}
     ${t.role?`<div class="tnote">Rooli: ${esc(t.role)}</div>`:''}
     ${t.notes?`<div class="tnote">${esc(t.notes)}</div>`:''}
@@ -1054,7 +1060,8 @@ function buildTraumaExtra(){
   wrap.innerHTML=`
     <label class="fl">Trauman tyyppi</label><div class="chips" id="tKind"></div>
     <label class="fl">Jäikö henkiin</label><div class="chips" id="tSurv"></div>
-    <label class="fl">Jatkohoito</label><div class="chips" id="tDisp"></div>`;
+    <label class="fl">Jatkohoito</label><div class="chips" id="tDisp"></div>
+    <div id="tDispDetail"></div>`;
   renderChips(document.getElementById('tKind'), TRAUMA_KINDS,
     o=>traumaDraft.traumaKind===o,
     v=>{ traumaDraft.traumaKind=(traumaDraft.traumaKind===v?'':v); buildTraumaExtra(); });
@@ -1064,7 +1071,19 @@ function buildTraumaExtra(){
     o=>o==='Kyllä'?'#34d399':'#f87171');
   renderChips(document.getElementById('tDisp'), DISPOSITIONS,
     o=>(traumaDraft.disposition||[]).includes(o),
-    v=>{ const a=traumaDraft.disposition||(traumaDraft.disposition=[]); const i=a.indexOf(v); if(i<0)a.push(v); else a.splice(i,1); buildTraumaExtra(); });
+    v=>{ const a=traumaDraft.disposition||(traumaDraft.disposition=[]); const i=a.indexOf(v);
+      if(i<0) a.push(v);
+      else { a.splice(i,1); if(traumaDraft.dispositionDetail) delete traumaDraft.dispositionDetail[v]; }
+      buildTraumaExtra(); });
+  /* Tarkentavat lisävalinnat valituille jatkohoidoille */
+  const dd=document.getElementById('tDispDetail');
+  const dets=(traumaDraft.disposition||[]).filter(x=>DISPOSITION_DETAILS[x]);
+  dd.innerHTML=dets.map((x,j)=>`<label class="fl">${esc(x)} — tarkenne</label><div class="chips" id="tdd${j}"></div>`).join('');
+  dets.forEach((x,j)=>{
+    renderChips(document.getElementById('tdd'+j), DISPOSITION_DETAILS[x],
+      o=>(traumaDraft.dispositionDetail||{})[x]===o,
+      v=>{ const m=traumaDraft.dispositionDetail||(traumaDraft.dispositionDetail={}); m[x]=(m[x]===v?'':v); buildTraumaExtra(); });
+  });
 }
 function buildTraumaRoleChips(){
   const c=document.getElementById('tRoleChips');
@@ -1092,7 +1111,7 @@ function openTrauma(id, returnTo){
 function openNewTrauma(pre, returnTo){
   editingTraumaId=null; traumaReturnTo=returnTo;
   traumaDraft=Object.assign({id:null, shiftId:null, date:ymd(new Date()), type:'traumahalytys',
-    age:'', mechanism:'', injuries:'', role:'', notes:'', traumaKind:'', survived:'', disposition:[]}, pre||{});
+    age:'', mechanism:'', injuries:'', role:'', notes:'', traumaKind:'', survived:'', disposition:[], dispositionDetail:{}}, pre||{});
   document.getElementById('traumaTitle').textContent='Uusi potilas';
   document.getElementById('deleteTrauma').style.display='none';
   fillTraumaForm(); document.getElementById('traumaSheet').classList.add('open');
@@ -1113,7 +1132,8 @@ document.getElementById('saveTrauma').onclick=()=>{
   if(!traumaDraft.mechanism && !traumaDraft.injuries && !traumaDraft.age && !traumaDraft.notes){
     alert('Täytä ainakin vammamekanismi, vammat tai ikä.'); return;
   }
-  if(!isTraumaGroup(traumaDraft.type)){ traumaDraft.traumaKind=''; traumaDraft.survived=''; traumaDraft.disposition=[]; }
+  if(!isTraumaGroup(traumaDraft.type)){ traumaDraft.traumaKind=''; traumaDraft.survived=''; traumaDraft.disposition=[]; traumaDraft.dispositionDetail={}; }
+  if(traumaDraft.dispositionDetail) Object.keys(traumaDraft.dispositionDetail).forEach(k=>{ if(!(traumaDraft.disposition||[]).includes(k)) delete traumaDraft.dispositionDetail[k]; });
   if(editingTraumaId){ traumas[traumas.findIndex(t=>t.id===editingTraumaId)]=traumaDraft; }
   else { traumaDraft.id=rid(); traumaDraft.created=Date.now(); traumas.push(traumaDraft); }
   saveTraumas(); closeTrauma();
