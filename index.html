@@ -1,0 +1,1391 @@
+<!DOCTYPE html>
+<html lang="fi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="MeikkuLog">
+<meta name="theme-color" content="#0b1020">
+<link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 180 180'%3E%3Crect width='180' height='180' rx='40' fill='%230b1020'/%3E%3Ctext x='90' y='122' font-size='95' text-anchor='middle' fill='%234f8cff' font-family='Arial' font-weight='bold'%3EM%3C/text%3E%3C/svg%3E">
+<title>MeikkuLog</title>
+<style>
+  :root{
+    --bg:#0b1020; --bg2:#121830; --card:#171f3d; --card2:#1e284a;
+    --line:#2a3666; --text:#eef2ff; --muted:#9aa6d4; --accent:#4f8cff;
+    --good:#34d399; --warn:#fbbf24; --danger:#f87171; --r:16px;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  html,body{margin:0; padding:0;}
+  body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+    background:linear-gradient(180deg,var(--bg),#080c1a 60%); color:var(--text);
+    min-height:100vh; padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+    -webkit-font-smoothing:antialiased;}
+  .wrap{max-width:580px; margin:0 auto; padding:14px 14px 120px;}
+  header{display:flex; align-items:center; justify-content:space-between; gap:10px; padding:8px 2px 14px;}
+  header h1{font-size:22px; margin:0; letter-spacing:.3px;}
+  .iconbtn{background:var(--card); border:1px solid var(--line); color:var(--text);
+    width:42px; height:42px; border-radius:12px; font-size:19px; display:grid; place-items:center;}
+  .iconbtn:active{transform:scale(.94);}
+
+  .monthbar{display:flex; align-items:center; justify-content:space-between; gap:8px;
+    background:var(--card); border:1px solid var(--line); border-radius:var(--r); padding:8px; margin-bottom:12px;}
+  .monthbar .m{font-weight:700; font-size:16px; text-transform:capitalize;}
+  .nav{background:var(--card2); border:1px solid var(--line); color:var(--text);
+    width:38px; height:38px; border-radius:11px; font-size:18px;}
+  .nav:active{transform:scale(.94);}
+
+  .stats{display:flex; gap:8px; margin-bottom:14px;}
+  .stat{flex:1; background:var(--card); border:1px solid var(--line); border-radius:14px; padding:10px 12px;}
+  .stat .num{font-size:20px; font-weight:800;}
+  .stat .lbl{font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:.5px;}
+  .stat.tap:active{background:var(--card2);}
+
+  .day{margin-bottom:10px;}
+  .daylabel{font-size:12px; color:var(--muted); margin:14px 4px 6px; text-transform:capitalize; font-weight:600;}
+  .shift{display:flex; gap:12px; align-items:stretch; background:var(--card); border:1px solid var(--line);
+    border-radius:var(--r); padding:12px; margin-bottom:8px; position:relative; overflow:hidden;}
+  .shift:active{background:var(--card2);}
+  .badge{min-width:46px; border-radius:12px; display:grid; place-items:center; font-weight:800; color:#06122b; padding:6px 4px;}
+  .badge .code{font-size:22px; line-height:1;}
+  .shift .body{flex:1; min-width:0;}
+  .shift .name{font-weight:700; font-size:15px;}
+  .shift .time{color:var(--muted); font-size:13px; margin-top:2px;}
+  .segs{margin-top:8px; display:flex; flex-direction:column; gap:5px;}
+  .seg{display:flex; align-items:center; gap:8px; font-size:13px;}
+  .seg .dot{width:10px; height:10px; border-radius:50%; flex:none;}
+  .seg .st{color:var(--muted); font-variant-numeric:tabular-nums; min-width:92px;}
+  .seg .rc{font-weight:700;}
+  .empty{text-align:center; color:var(--muted); padding:40px 20px; line-height:1.6;}
+  .empty .big{font-size:40px; margin-bottom:8px;}
+
+  .fab{position:fixed; right:max(18px,env(safe-area-inset-right)); bottom:max(22px,env(safe-area-inset-bottom));
+    width:62px; height:62px; border-radius:50%; background:var(--accent); color:#fff; border:none;
+    font-size:34px; box-shadow:0 8px 24px rgba(79,140,255,.45); display:grid; place-items:center; z-index:20;}
+  .fab:active{transform:scale(.92);}
+
+  .sheet{position:fixed; inset:0; background:rgba(4,7,18,.6); backdrop-filter:blur(4px); z-index:30; display:none;
+    align-items:flex-end; justify-content:center;}
+  .sheet.open{display:flex;}
+  .panel{background:var(--bg2); width:100%; max-width:580px; max-height:94vh; overflow-y:auto;
+    border-radius:22px 22px 0 0; border:1px solid var(--line); border-bottom:none;
+    padding:10px 16px calc(24px + env(safe-area-inset-bottom)); animation:up .25s ease;}
+  @keyframes up{from{transform:translateY(40px); opacity:.6;} to{transform:translateY(0); opacity:1;}}
+  .grab{width:40px; height:5px; border-radius:5px; background:var(--line); margin:6px auto 12px;}
+  .panel h2{margin:4px 0 14px; font-size:19px;}
+  label.fl{display:block; font-size:12px; color:var(--muted); margin:14px 0 6px; text-transform:uppercase; letter-spacing:.5px;}
+  input[type=date],input[type=time],input[type=text],input[type=file]{width:100%; background:var(--card); border:1px solid var(--line);
+    color:var(--text); border-radius:12px; padding:13px 12px; font-size:16px; font-family:inherit; min-height:48px;}
+  textarea{width:100%; background:var(--card); border:1px solid var(--line); color:var(--text); border-radius:12px;
+    padding:12px; font-size:13px; font-family:ui-monospace,Menlo,Consolas,monospace; min-height:130px; resize:vertical;}
+
+  .typegrid{display:grid; grid-template-columns:repeat(5,1fr); gap:7px;}
+  .typebtn{background:var(--card); border:1px solid var(--line); color:var(--text); border-radius:12px;
+    padding:9px 2px; font-weight:800; font-size:18px; display:flex; flex-direction:column; align-items:center; gap:2px;}
+  .typebtn small{font-size:9px; font-weight:600; color:var(--muted);}
+  .typebtn.sel{border-color:var(--accent); box-shadow:0 0 0 2px rgba(79,140,255,.4) inset;}
+  .typebtn:active{transform:scale(.95);}
+
+  .seglabel{font-size:12px; color:var(--muted); text-transform:uppercase; letter-spacing:.5px; margin:16px 0 8px;}
+  .segedit{background:var(--card); border:1px solid var(--line); border-radius:14px; padding:12px; margin-bottom:10px;}
+  .segedit .top{display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;}
+  .segedit .top .ttl{font-size:12px; color:var(--muted); text-transform:uppercase; letter-spacing:.5px; display:flex; align-items:center; gap:8px;}
+  .codepill{font-weight:800; color:#06122b; padding:3px 10px; border-radius:8px; font-size:14px;}
+  .delseg{background:none; border:none; color:var(--danger); font-size:13px; font-weight:600;}
+  .timepair{display:flex; gap:8px; align-items:center; margin:8px 0 4px;}
+  .timepair input{flex:1;}
+  .timepair .ar{color:var(--muted);}
+  .timepair .dh{color:var(--muted); font-size:12px; min-width:48px; text-align:right;}
+
+  .chips{display:flex; flex-wrap:wrap; gap:6px; margin-top:8px;}
+  .chip{background:var(--card2); border:1px solid var(--line); color:var(--text); border-radius:10px;
+    padding:8px 11px; font-size:14px; font-weight:600;}
+  .chip.sel{border-color:transparent; color:#06122b;}
+  .chip:active{transform:scale(.95);}
+  .miniL{font-size:11px; color:var(--muted); margin:10px 0 0; text-transform:uppercase; letter-spacing:.5px;}
+  .toggles{display:flex; gap:8px; margin-top:8px;}
+  .tg{flex:1; background:var(--card2); border:1px solid var(--line); color:var(--muted); border-radius:10px;
+    padding:10px; font-size:14px; font-weight:700; text-align:center;}
+  .tg.on{background:var(--accent); border-color:var(--accent); color:#fff;}
+  .tg:active{transform:scale(.97);}
+
+  .btn{display:block; width:100%; border:none; border-radius:14px; padding:15px; font-size:16px; font-weight:700; margin-top:10px; font-family:inherit;}
+  .btn.primary{background:var(--accent); color:#fff;}
+  .btn.ghost{background:var(--card); color:var(--text); border:1px solid var(--line);}
+  .btn.danger{background:rgba(248,113,113,.12); color:var(--danger); border:1px solid rgba(248,113,113,.3);}
+  .btn:active{transform:scale(.98);}
+  .addseg{background:var(--card2); border:1px dashed var(--line); color:var(--accent); border-radius:12px; padding:12px; width:100%; font-weight:700; font-size:14px;}
+  .hint{font-size:12px; color:var(--muted); line-height:1.6; margin-top:10px;}
+  .hint code{background:var(--card); padding:1px 5px; border-radius:5px; font-size:11px;}
+
+  .scopebar{display:flex; gap:8px; margin-bottom:12px;}
+  .scope{flex:1; background:var(--card); border:1px solid var(--line); color:var(--muted); border-radius:11px; padding:10px; font-weight:700; font-size:14px;}
+  .scope.on{background:var(--accent); border-color:var(--accent); color:#fff;}
+  .statrow{display:flex; align-items:center; gap:10px; background:var(--card); border:1px solid var(--line);
+    border-radius:12px; padding:11px 12px; margin-bottom:7px;}
+  .statrow .codepill{font-size:13px;}
+  .statrow .grow{flex:1;}
+  .statrow .meta{font-size:13px; color:var(--muted); font-variant-numeric:tabular-nums; text-align:right;}
+  .statrow .meta b{color:var(--text); font-size:14px;}
+
+  .s-section{margin:20px 2px 8px; font-size:12px; color:var(--muted); text-transform:uppercase; letter-spacing:.6px; font-weight:700;}
+  .tilegrid{display:grid; grid-template-columns:repeat(3,1fr); gap:8px;}
+  .tile{background:var(--card); border:1px solid var(--line); border-radius:12px; padding:10px;}
+  .tile .v{font-size:17px; font-weight:800; font-variant-numeric:tabular-nums;}
+  .tile .k{font-size:10px; color:var(--muted); text-transform:uppercase; letter-spacing:.4px; margin-top:2px;}
+  .brow{background:var(--card); border:1px solid var(--line); border-radius:12px; padding:10px 12px; margin-bottom:7px;}
+  .brow .l1{display:flex; align-items:center; gap:8px;}
+  .brow .nm{font-weight:700; font-size:14px; flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+  .brow .mt{font-size:12px; color:var(--muted); font-variant-numeric:tabular-nums; white-space:nowrap;}
+  .brow .mt b{color:var(--text);}
+  .bar{height:6px; border-radius:4px; background:var(--card2); overflow:hidden; margin-top:8px;}
+  .bar i{display:block; height:100%; border-radius:4px;}
+  .vchart{display:flex; gap:6px; align-items:stretch; background:var(--card); border:1px solid var(--line); border-radius:12px; padding:12px 10px 8px; height:120px;}
+  .vcol{flex:1; display:flex; flex-direction:column; align-items:center; justify-content:flex-end; gap:3px; min-width:0;}
+  .vcol .db{width:100%; max-width:26px; background:var(--accent); border-radius:4px 4px 0 0; min-height:2px;}
+  .vcol .dl,.vcol .dv{font-size:9px; color:var(--muted); white-space:nowrap;}
+  .chipstat{display:inline-flex; align-items:center; gap:6px; background:var(--card); border:1px solid var(--line);
+    border-radius:10px; padding:8px 11px; font-size:13px; font-weight:600; margin:0 6px 6px 0;}
+  .chipstat b{color:var(--accent);}
+  .okmsg{background:rgba(52,211,153,.12); border:1px solid rgba(52,211,153,.35); color:var(--good);
+    border-radius:12px; padding:11px 12px; font-size:13px; margin-top:10px; display:none; white-space:pre-line;}
+
+  /* Traumapäiväkirja */
+  .traumagrid{display:grid; grid-template-columns:repeat(3,1fr); gap:7px;}
+  .ttbtn{background:var(--card); border:1px solid var(--line); color:var(--text); border-radius:12px;
+    padding:11px 6px; font-weight:700; font-size:13px; display:flex; flex-direction:column; align-items:center;
+    gap:6px; text-align:center; line-height:1.2; font-family:inherit;}
+  .ttbtn .dot{width:14px; height:14px; border-radius:50%; flex:none;}
+  .ttbtn.sel{border-color:var(--accent); box-shadow:0 0 0 2px rgba(79,140,255,.4) inset;}
+  .ttbtn:active{transform:scale(.96);}
+  .trow{background:var(--card); border:1px solid var(--line); border-radius:12px; padding:11px 12px; margin-bottom:8px;}
+  .trow .th{display:flex; align-items:center; gap:8px; margin-bottom:5px;}
+  .trow .tb{font-weight:800; color:#06122b; padding:3px 10px; border-radius:8px; font-size:12px; white-space:nowrap;}
+  .trow .tage{font-weight:700; font-size:14px;}
+  .trow .td{font-size:12px; color:var(--muted); font-variant-numeric:tabular-nums; margin-left:auto;}
+  .trow .tmech{font-size:14px; font-weight:600; margin-bottom:2px;}
+  .trow .tinj{font-size:13px; color:var(--muted); line-height:1.45;}
+  .trow .tnote{font-size:12px; color:var(--muted); margin-top:4px;}
+  .trow:active{background:var(--card2);}
+  .traumatag{display:inline-flex; align-items:center; gap:5px; font-size:11px; font-weight:800;
+    color:#06122b; padding:2px 9px; border-radius:7px;}
+  .logmonth{font-size:12px; color:var(--muted); text-transform:capitalize; font-weight:700; margin:16px 4px 8px;}
+  .traumahint{background:rgba(248,113,113,.10); border:1px solid rgba(248,113,113,.28); color:var(--text);
+    border-radius:12px; padding:10px 12px; font-size:12px; line-height:1.5; margin-bottom:10px;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>MeikkuLog</h1>
+    <div style="display:flex; gap:8px;">
+      <button class="iconbtn" id="logBtn" title="Hätätilapotilaat">🩸</button>
+      <button class="iconbtn" id="importBtn" title="Tuo / palauta">⤒</button>
+      <button class="iconbtn" id="exportBtn" title="Varmuuskopio">⤓</button>
+    </div>
+  </header>
+
+  <div class="monthbar">
+    <button class="nav" id="prevM">‹</button>
+    <div class="m" id="monthLabel"></div>
+    <button class="nav" id="nextM">›</button>
+  </div>
+
+  <div class="stats">
+    <div class="stat"><div class="num" id="stCount">0</div><div class="lbl">Vuoroa</div></div>
+    <div class="stat"><div class="num" id="stHours">0 h</div><div class="lbl">Tunteja</div></div>
+    <div class="stat tap" id="stRoles"><div class="num">Σ</div><div class="lbl">Roolit →</div></div>
+  </div>
+
+  <div id="list"></div>
+</div>
+
+<button class="fab" id="addBtn">+</button>
+
+<!-- Vuoron muokkaus -->
+<div class="sheet" id="shiftSheet">
+  <div class="panel">
+    <div class="grab"></div>
+    <h2 id="sheetTitle">Lisää vuoro</h2>
+
+    <label class="fl">Päivämäärä</label>
+    <input type="date" id="fDate">
+
+    <label class="fl">Vuorotyyppi</label>
+    <div class="typegrid" id="typeGrid"></div>
+
+    <div class="seglabel">Osiot / roolit</div>
+    <div id="segContainer"></div>
+    <button class="addseg" id="addSegBtn">+ Jaa vuoro / lisää osio</button>
+
+    <div class="seglabel">Hätätilapotilaat</div>
+    <div id="traumaSection"></div>
+    <button class="addseg" id="addTraumaBtn">+ Lisää potilas</button>
+
+    <div class="seglabel">Toimenpiteet & hälytykset</div>
+    <div id="procSection"></div>
+    <button class="addseg" id="addProcBtn">+ Lisää toimenpide</button>
+
+    <button class="btn primary" id="saveShift">Tallenna</button>
+    <button class="btn danger" id="deleteShift" style="display:none;">Poista vuoro</button>
+    <button class="btn ghost" id="cancelShift">Peruuta</button>
+  </div>
+</div>
+
+<!-- Roolitilastot -->
+<div class="sheet" id="statsSheet">
+  <div class="panel">
+    <div class="grab"></div>
+    <h2>Roolitilastot</h2>
+    <div class="scopebar">
+      <button class="scope on" id="scMonth">Tämä kuukausi</button>
+      <button class="scope" id="scAll">Kaikki</button>
+    </div>
+    <div id="statsList"></div>
+    <button class="btn ghost" id="closeStats">Sulje</button>
+  </div>
+</div>
+
+<!-- Tuo / palauta -->
+<div class="sheet" id="importSheet">
+  <div class="panel">
+    <div class="grab"></div>
+    <h2>Tuo / palauta</h2>
+
+    <label class="fl">Palauta varmuuskopiosta (JSON-tiedosto)</label>
+    <input type="file" id="impFile" accept=".json,application/json,text/plain">
+
+    <label class="fl">Tai liitä vuorokoodi / varmuuskopion sisältö</label>
+    <textarea id="impText" placeholder="11.6.2026 C 07:15-14:30 H2; 14:30-19:45 RH/H3&#10;12.6.2026 Y (H3)&#10;13.6.2026 A H2elv"></textarea>
+    <button class="btn primary" id="impGo">Tuo</button>
+    <div class="okmsg" id="impMsg"></div>
+
+    <p class="hint">
+      Rivimuoto: <code>pp.kk.vvvv VUOROKOODI</code> ja perään valinnaisesti osiot, esim.<br>
+      <code>11.6.2026 C 07:15-14:30 H2; 14:30-19:45 RH/H3</code><br>
+      Rooli voi olla esim. <code>H2</code>, <code>(H2)</code>, <code>H2elv</code>, <code>H2/AMB</code>, <code>H3/TRAU</code>, <code>RH/H3</code>, <code>RH/T-Aula</code>, <code>AMBreboa</code>, <code>H4ane2/knk</code>, <code>RH</code>.
+      Jos rooli puuttuu, vuoro merkitään <code>?</code>-roolilla ja voit täydentää sen myöhemmin.
+      Jos samalle päivälle on jo vuoro, tuonti korvaa sen.
+    </p>
+    <button class="btn ghost" id="closeImport">Sulje</button>
+  </div>
+</div>
+
+<!-- Kirjaukset: potilaat & toimenpiteet -->
+<div class="sheet" id="logSheet" style="z-index:32;">
+  <div class="panel">
+    <div class="grab"></div>
+    <h2 id="logTitle">Hätätilapotilaat</h2>
+    <div class="scopebar">
+      <button class="scope on" id="tabPatients">Potilaat</button>
+      <button class="scope" id="tabProcs">Toimenpiteet</button>
+    </div>
+    <div id="logStats"></div>
+    <button class="btn primary" id="addLogItem">+ Lisää potilas</button>
+    <div id="logList"></div>
+    <button class="btn ghost" id="closeLog">Sulje</button>
+  </div>
+</div>
+
+<!-- Potilaan kirjaus -->
+<div class="sheet" id="traumaSheet" style="z-index:42;">
+  <div class="panel">
+    <div class="grab"></div>
+    <h2 id="traumaTitle">Potilas</h2>
+
+    <label class="fl">Päivämäärä</label>
+    <input type="date" id="tDate">
+
+    <label class="fl">Tyyppi</label>
+    <div class="traumagrid" id="tTypeGrid"></div>
+
+    <label class="fl">Ikä / sukupuoli</label>
+    <input type="text" id="tAge" placeholder="esim. 20v mies">
+
+    <label class="fl">Vammamekanismi</label>
+    <input type="text" id="tMech" placeholder="esim. putoaminen 15 m, autokolari">
+
+    <label class="fl">Vammat / löydökset</label>
+    <textarea id="tInj" placeholder="esim. rintarangan murtuma, oik. ilmarinta"></textarea>
+
+    <label class="fl">Rooli</label>
+    <div class="chips" id="tRoleChips"></div>
+
+    <label class="fl">Lisätiedot (valinnainen)</label>
+    <textarea id="tNotes" style="min-height:80px;"></textarea>
+
+    <button class="btn primary" id="saveTrauma">Tallenna</button>
+    <button class="btn danger" id="deleteTrauma" style="display:none;">Poista</button>
+    <button class="btn ghost" id="cancelTrauma">Peruuta</button>
+  </div>
+</div>
+
+<!-- Toimenpiteen kirjaus -->
+<div class="sheet" id="procSheet" style="z-index:42;">
+  <div class="panel">
+    <div class="grab"></div>
+    <h2 id="procTitle">Toimenpide</h2>
+
+    <label class="fl">Päivämäärä</label>
+    <input type="date" id="pDate">
+
+    <label class="fl">Tyyppi</label>
+    <div class="traumagrid" id="pTypeGrid"></div>
+
+    <div id="pOutcomeWrap" style="display:none;">
+      <label class="fl">Lopputulos (UÄ-kanyyli)</label>
+      <div class="traumagrid" id="pOutcomeGrid"></div>
+    </div>
+
+    <label class="fl">Huone / sijainti</label>
+    <div class="chips" id="pRoomChips"></div>
+
+    <label class="fl">Lisätiedot (valinnainen)</label>
+    <textarea id="pNotes" style="min-height:80px;" placeholder="esim. potilas, indikaatio, kuka intuboi"></textarea>
+
+    <button class="btn primary" id="saveProc">Tallenna</button>
+    <button class="btn danger" id="deleteProc" style="display:none;">Poista</button>
+    <button class="btn ghost" id="cancelProc">Peruuta</button>
+  </div>
+</div>
+
+<script>
+/* ---------- Vuorotyypit ---------- */
+const SHIFT_TYPES = [
+  {code:'A', name:'Aamuvuoro',        start:'07:15', end:'15:00', color:'#fcd34d'},
+  {code:'D', name:'Välivuoro',        start:'10:00', end:'18:00', color:'#86efac'},
+  {code:'I', name:'Iltavuoro',        start:'13:30', end:'21:30', color:'#fca5a5', we:{code:'i', start:'14:30', end:'21:30'}},
+  {code:'Y', name:'Yövuoro',          start:'21:00', end:'07:30', color:'#a5b4fc', overnight:true},
+  {code:'d', name:'HTA Välivuoro',    start:'09:00', end:'16:00', color:'#67e8f9'},
+  {code:'J', name:'HTA Iltavuoro',    start:'15:45', end:'23:00', color:'#f0abfc', we:{code:'j', start:'15:15', end:'23:00'}},
+  {code:'Ö', name:'Poikkeava yövuoro',start:'18:00', end:'02:00', color:'#c4b5fd', overnight:true},
+  {code:'C', name:'Pitkä aamuvuoro',  start:'07:15', end:'19:45', color:'#fdba74', long:true},
+  {code:'R', name:'Pitkä iltavuoro',  start:'09:30', end:'21:30', color:'#fb7185', long:true},
+  {code:'W', name:'Pitkä yövuoro',    start:'19:30', end:'07:30', color:'#818cf8', overnight:true, long:true},
+];
+const typeByCode = c => SHIFT_TYPES.find(t=>t.code===c) || SHIFT_TYPES.find(t=>t.we&&t.we.code===c);
+
+/* Vuorot ryhmiteltynä: aamu / väli / ilta / yö */
+const SHIFT_CATS=[
+  {id:'aamu', label:'Aamuvuorot', short:'Aamu', codes:['A','C'],     color:'#fcd34d'},
+  {id:'vali', label:'Välivuorot', short:'Väli', codes:['D','d'],     color:'#86efac'},
+  {id:'ilta', label:'Iltavuorot', short:'Ilta', codes:['I','J','R'], color:'#fca5a5'},
+  {id:'yo',   label:'Yövuorot',   short:'Yö',   codes:['Y','Ö','W'], color:'#a5b4fc'},
+];
+function shiftCat(code){ return SHIFT_CATS.find(c=>c.codes.includes(code)); }
+
+/* ---------- Roolit / sijainnit ---------- */
+const LOCS = [
+  {id:'H2',       label:'H2',        color:'#f0abfc', room:true},
+  {id:'H3',       label:'H3',        color:'#fca5a5', room:true},
+  {id:'H4',       label:'H4',        color:'#fdba74', room:true},
+  {id:'H5',       label:'H5',        color:'#86efac', room:true},
+  {id:'H6',       label:'H6',        color:'#67e8f9', room:true},
+  {id:'H19',      label:'H19',       color:'#fde68a', room:true},
+  {id:'HTA',      label:'HTA',       color:'#5eead4', room:true},
+  {id:'T-Aula',   label:'T-Aula',    color:'#a5b4fc', room:true, noVastaava:true},
+  {id:'AMBreboa', label:'AMBreboa',  color:'#f9a8d4', rhOk:true},
+  {id:'RH',       label:'RH (yksin)',color:'#f87171'},
+  {id:'Muu',      label:'Muu…',      color:'#cbd5e1', rhOk:true},
+];
+const locById = id => LOCS.find(l=>l.id===id);
+const SUFFIXES = {
+  H2:['ane','elv','TRAU'], H3:['elv','TRAU'], H4:['elv','ane2/knk'], H5:['elv'],
+  H6:['elv'], H19:['elv'], HTA:['elv'], 'T-Aula':['elv'],
+  RH:['ane','ane2/knk','elv','TRAU','reboa']
+};
+
+function roleCode(seg){
+  if(seg.loc==='AMBreboa') return (seg.rh?'RH/':'')+'AMBreboa';
+  if(seg.loc==='RH') return seg.suffix ? 'RH/'+seg.suffix : 'RH';
+  if(seg.loc==='Muu') return (seg.rh?'RH/':'')+(seg.custom||'?');
+  let core = seg.loc;
+  const l=locById(seg.loc);
+  if(seg.vastaava && l && !l.noVastaava) core='('+seg.loc+')';
+  if(seg.suffix==='ane'||seg.suffix==='elv'||seg.suffix==='ane2/knk') core+=seg.suffix;
+  else if(seg.suffix==='AMB'||seg.suffix==='TRAU') core+='/'+seg.suffix;
+  if(seg.rh) core='RH/'+core;
+  return core;
+}
+function roleColor(seg){ const l=locById(seg.loc); return l?l.color:'#cbd5e1'; }
+
+/* Roolikoodin tulkinta tekstistä (tuontia varten) */
+const ROOM_IDS=['HTA','H19','H2','H3','H4','H5','H6','T-AULA'];
+function canonLoc(u){ return u==='T-AULA'?'T-Aula':u; }
+function parseRole(str){
+  const orig=(str||'').trim();
+  const muu = txt=>({loc:'Muu',vastaava:false,suffix:'',rh:false,custom:txt});
+  if(!orig) return muu('?');
+  let s=orig, rh=false;
+  if(/^RH$/i.test(s)) return {loc:'RH',vastaava:false,suffix:'',rh:false,custom:''};
+  if(/^RH\//i.test(s)){ rh=true; s=s.slice(3).trim(); }
+  if(/^AMBREBOA$/i.test(s)) return {loc:'AMBreboa',vastaava:false,suffix:'',rh:rh,custom:''};
+  if(rh){
+    const rm=s.match(/^(ane2\/knk|ane|elv|trau|reboa)$/i);
+    if(rm){ const sf=/^trau$/i.test(rm[1])?'TRAU':rm[1].toLowerCase(); return {loc:'RH',vastaava:false,suffix:sf,rh:false,custom:''}; }
+  }
+  let vast=false, base=null, rest='';
+  const pm=s.match(/^\(([^)]+)\)(.*)$/);
+  if(pm){
+    const u=pm[1].trim().toUpperCase();
+    const hit=ROOM_IDS.find(r=>r===u);
+    if(!hit) return muu(orig);
+    vast=true; base=canonLoc(hit); rest=pm[2];
+  }else{
+    const U=s.toUpperCase();
+    const hit=ROOM_IDS.find(r=>U.startsWith(r));
+    if(!hit) return muu(orig);
+    base=canonLoc(hit); rest=s.slice(hit.length);
+  }
+  rest=rest.trim();
+  let suffix='';
+  if(rest===''){}
+  else if(/^ane2\/knk$/i.test(rest)) suffix='ane2/knk';
+  else if(/^ane$/i.test(rest)) suffix='ane';
+  else if(/^elv$/i.test(rest)) suffix='elv';
+  else if(/^\/?amb$/i.test(rest)) suffix='AMB';
+  else if(/^\/?trau$/i.test(rest)) suffix='TRAU';
+  else return muu(orig);
+  if(base==='T-Aula') vast=false;
+  return {loc:base,vastaava:vast,suffix:suffix,rh:rh,custom:''};
+}
+
+/* ---------- Tallennus ---------- */
+const LS_SHIFTS='tv_shifts2';
+let shifts = JSON.parse(localStorage.getItem(LS_SHIFTS)||'[]');
+function saveShifts(){ localStorage.setItem(LS_SHIFTS, JSON.stringify(shifts)); }
+function rid(){ return Math.random().toString(36).slice(2,9); }
+
+/* ---------- Traumapotilaat ---------- */
+const LS_TRAUMAS='tv_traumas';
+let traumas = JSON.parse(localStorage.getItem(LS_TRAUMAS)||'[]');
+function saveTraumas(){ localStorage.setItem(LS_TRAUMAS, JSON.stringify(traumas)); }
+
+const TRAUMA_TYPES=[
+  {id:'traumahalytys',     label:'Traumahälytys',     short:'Trauma',    color:'#fca5a5', group:'Trauma'},
+  {id:'raptor_vakaa',      label:'Raptor vakaa',      short:'Raptor V',  color:'#fcd34d', group:'Trauma'},
+  {id:'raptor_instabiili', label:'Raptor instabiili', short:'Raptor I',  color:'#f87171', group:'Trauma'},
+  {id:'elvytys',           label:'Elvytys',           short:'Elvytys',   color:'#a5b4fc', group:'Muu hätä'},
+  {id:'muu_hata',          label:'Muu hätätila',      short:'Muu hätä',  color:'#86efac', group:'Muu hätä'},
+];
+function traumaTypeById(id){ return TRAUMA_TYPES.find(t=>t.id===id)||TRAUMA_TYPES[0]; }
+
+/* Erikoisroolit, joiden aikana traumapotilaita yleensä kirjataan */
+const TRAUMA_ROLE_SUFFIXES=['TRAU','ane','ane2/knk'];
+function shiftHasTraumaRole(s){
+  return (s.segments||[]).some(seg=> seg.loc==='AMBreboa' || TRAUMA_ROLE_SUFFIXES.includes(seg.suffix));
+}
+function traumaRolePrefill(s){
+  const seg=(s.segments||[]).find(g=> g.loc==='AMBreboa' || TRAUMA_ROLE_SUFFIXES.includes(g.suffix));
+  if(!seg) return '';
+  if(seg.loc==='AMBreboa') return 'AMBreboa';
+  if(seg.suffix==='TRAU') return 'Traumahoitaja';
+  if(seg.suffix==='ane') return 'Ane1';
+  if(seg.suffix==='ane2/knk') return 'Ane2';
+  return '';
+}
+
+/* Roolit traumakirjauksissa — vain nämä neljä. Mikä tahansa "trauma" = Traumahoitaja. */
+const PATIENT_ROLES=['Traumahoitaja','Ane1','Ane2','AMBreboa'];
+function canonRole(s){
+  s=(s||'').toString().trim();
+  if(!s) return '';
+  if(/trau/i.test(s)) return 'Traumahoitaja';
+  if(/ane2/i.test(s)) return 'Ane2';
+  if(/ane/i.test(s)) return 'Ane1';
+  if(/amb/i.test(s)) return 'AMBreboa';
+  return '';
+}
+/* Normalisoi aiemmin tallennetut roolit kanonisiksi */
+(function migrateTraumaRoles(){
+  let changed=false;
+  traumas.forEach(t=>{ const c=canonRole(t.role); if(c!==(t.role||'')){ t.role=c; changed=true; } });
+  if(changed) saveTraumas();
+})();
+
+/* ---------- Toimenpiteet & hälytykset ---------- */
+const LS_PROCS='tv_procs';
+let procs = JSON.parse(localStorage.getItem(LS_PROCS)||'[]');
+function saveProcs(){ localStorage.setItem(LS_PROCS, JSON.stringify(procs)); }
+
+/* Meilahden päivystyksessä mahdollisia tilanteita — voi tapahtua missä huoneessa tahansa */
+const PROC_TYPES=[
+  {id:'intubaatio',   label:'Intubaatio',              short:'Intub.',   color:'#fca5a5'},
+  {id:'stroke',       label:'STROKE-hälytys',          short:'STROKE',   color:'#a5b4fc'},
+  {id:'elvytys',      label:'Elvytys',                 short:'Elvytys',  color:'#f87171'},
+  {id:'stemi',        label:'STEMI / sydänhälytys',    short:'STEMI',    color:'#fdba74'},
+  {id:'massiivivuoto',label:'Massiivivuoto',           short:'Massiivi', color:'#fb7185'},
+  {id:'sepsis',       label:'Sepsis-hälytys',          short:'Sepsis',   color:'#fcd34d'},
+  {id:'kardioversio', label:'Kardioversio / tahdistus',short:'Kardiov.', color:'#67e8f9'},
+  {id:'ua_kanyyli',   label:'UÄ perifeerinen kanyyli', short:'UÄ-kanyyli',color:'#5eead4', cannula:true},
+  {id:'cvk',          label:'Keskuslaskimokatetri',    short:'CVK',      color:'#c4b5fd'},
+  {id:'arteria',      label:'Arteriakanyyli',          short:'Arteria',  color:'#f0abfc'},
+  {id:'io',           label:'Intraosseaali (IO)',      short:'IO',       color:'#86efac'},
+  {id:'muu',          label:'Muu toimenpide',          short:'Muu',      color:'#cbd5e1'},
+];
+function procTypeById(id){ return PROC_TYPES.find(p=>p.id===id)||PROC_TYPES[PROC_TYPES.length-1]; }
+
+/* UÄ-kanyloinnin lopputulos */
+const CANNULA_OUTCOMES=[
+  {id:'ua_tarvittu',  label:'Tarvitsi UÄ',         short:'UÄ tarvittu', color:'#34d399'},
+  {id:'ilman_ua',     label:'Onnistui ilman UÄ',   short:'Ilman UÄ',    color:'#fcd34d'},
+  {id:'ei_onnistunut',label:'En saanut laitettua', short:'Ei onnist.',  color:'#f87171'},
+];
+function outcomeById(id){ return CANNULA_OUTCOMES.find(o=>o.id===id); }
+
+/* Toimenpiteiden paikat (S-Aula ja RTG eivät ole vuorosijoituksia) */
+const PROC_ROOMS=[
+  {id:'H1',         label:'H1',          color:'#fda4af'},
+  {id:'H2',         label:'H2',          color:'#f0abfc'},
+  {id:'H3',         label:'H3',          color:'#fca5a5'},
+  {id:'H4',         label:'H4',          color:'#fdba74'},
+  {id:'H5',         label:'H5',          color:'#86efac'},
+  {id:'H6',         label:'H6',          color:'#67e8f9'},
+  {id:'H19',        label:'H19',         color:'#fde68a'},
+  {id:'Raptor-sali',label:'Raptor-sali', color:'#f87171'},
+  {id:'T-Aula',     label:'T-Aula',      color:'#a5b4fc'},
+  {id:'S-Aula',     label:'S-Aula',      color:'#f9a8d4'},
+  {id:'RTG',        label:'RTG',         color:'#fbbf24'},
+  {id:'Muu',        label:'Muu…',        color:'#cbd5e1'},
+];
+function procRoomById(id){ return PROC_ROOMS.find(r=>r.id===id) || locById(id) || {id:id,label:id,color:'#cbd5e1'}; }
+
+/* ---------- Apurit ---------- */
+const MONTHS=['tammikuu','helmikuu','maaliskuu','huhtikuu','toukokuu','kesäkuu','heinäkuu','elokuu','syyskuu','lokakuu','marraskuu','joulukuu'];
+const DAYS=['sunnuntai','maanantai','tiistai','keskiviikko','torstai','perjantai','lauantai'];
+function isWeekend(dateStr){ const g=new Date(dateStr+'T12:00').getDay(); return g===0||g===6; }
+function toMin(t){ const p=t.split(':').map(Number); return p[0]*60+p[1]; }
+function dur(s,e){ let d=toMin(e)-toMin(s); if(d<=0) d+=1440; return d; }
+function fmtH(min){ return (Math.round(min/60*100)/100).toString().replace('.',',')+' h'; }
+function ymd(d){ return d.toISOString().slice(0,10); }
+function esc(s){ return (s||'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+function pad2(n){ return ('0'+n).slice(-2); }
+function normTime(t){ t=t.replace('.',':'); const p=t.split(':'); return pad2(p[0])+':'+p[1]; }
+
+let viewYear, viewMonth;
+(function(){ const n=new Date(); viewYear=n.getFullYear(); viewMonth=n.getMonth(); })();
+
+/* ---------- Lista ---------- */
+function render(){
+  document.getElementById('monthLabel').textContent = MONTHS[viewMonth]+' '+viewYear;
+  const inMonth = shifts.filter(s=>{ const d=new Date(s.date+'T12:00'); return d.getFullYear()===viewYear && d.getMonth()===viewMonth; })
+                        .sort((a,b)=> a.date<b.date?-1:a.date>b.date?1:0);
+  let totalMin=0; inMonth.forEach(s=> s.segments.forEach(seg=> totalMin+=dur(seg.start,seg.end)));
+  document.getElementById('stCount').textContent = inMonth.length;
+  document.getElementById('stHours').textContent = fmtH(totalMin);
+
+  const list=document.getElementById('list');
+  if(!inMonth.length){ list.innerHTML='<div class="empty"><div class="big">📋</div>Ei vuoroja tässä kuussa.<br>Lisää + napista tai tuo vuorot ⤒ napista.</div>'; return; }
+  list.innerHTML='';
+  inMonth.forEach(s=>{
+    const t=typeByCode(s.code);
+    const d=new Date(s.date+'T12:00');
+    const dayLbl=DAYS[d.getDay()]+' '+d.getDate()+'.'+(d.getMonth()+1)+'.';
+    const codeShown=(s.weCode && isWeekend(s.date) && t.we)? t.we.code : s.code;
+    const totMin=s.segments.reduce((a,seg)=>a+dur(seg.start,seg.end),0);
+    const card=document.createElement('div'); card.className='shift';
+    card.innerHTML=`
+      <div class="badge" style="background:${t.color}"><span class="code">${codeShown}</span></div>
+      <div class="body">
+        <div class="name">${t.name}</div>
+        <div class="time">${s.start}–${s.end} · ${fmtH(totMin)}</div>
+        <div class="segs">${s.segments.map(seg=>`
+          <div class="seg"><span class="dot" style="background:${roleColor(seg)}"></span>
+            <span class="st">${seg.start}–${seg.end}</span>
+            <span class="rc">${esc(roleCode(seg))}</span></div>`).join('')}</div>
+        ${shiftTraumaBadge(s.id)}
+        ${shiftProcBadge(s.id)}
+      </div>`;
+    card.onclick=()=>openShift(s.id);
+    const wrap=document.createElement('div'); wrap.className='day';
+    wrap.innerHTML=`<div class="daylabel" style="margin-top:0">${dayLbl}</div>`;
+    wrap.appendChild(card); list.appendChild(wrap);
+  });
+}
+
+/* ---------- Roolitilastot ---------- */
+let statsScope='month';
+function renderStats(){
+  document.getElementById('scMonth').classList.toggle('on', statsScope==='month');
+  document.getElementById('scAll').classList.toggle('on', statsScope==='all');
+  const src0 = statsScope==='month'
+    ? shifts.filter(s=>{ const d=new Date(s.date+'T12:00'); return d.getFullYear()===viewYear && d.getMonth()===viewMonth; })
+    : shifts.slice();
+  /* vain roolitetut mukaan: ?-osiot pois, kokonaan roolittamattomat vuorot ohitetaan */
+  const marked=seg=>!(seg.loc==='Muu' && (!seg.custom || seg.custom.trim()==='' || seg.custom.trim()==='?'));
+  const src=[]; let skipped=0;
+  src0.forEach(s=>{
+    const ms=s.segments.filter(marked);
+    if(ms.length) src.push(Object.assign({},s,{segments:ms})); else skipped++;
+  });
+  const el=document.getElementById('statsList');
+  if(!src.length){
+    el.innerHTML='<div class="empty">'+(skipped
+      ? skipped+' vuoroa odottaa roolimerkintää — tilastot lasketaan vain roolitetuista vuoroista.'
+      : 'Ei vuoroja.')+'</div>';
+    return;
+  }
+
+  /* --- kerää --- */
+  let totalMin=0, nightN=0, weN=0, weMin=0;
+  const byType={}, byLoc={}, byRole={}, dowMin=[0,0,0,0,0,0,0];
+  const vastSet={}, rhSet={}, sufSets={};
+  src.forEach(s=>{
+    const t=typeByCode(s.code);
+    let sMin=0;
+    s.segments.forEach(seg=>{
+      const m=dur(seg.start,seg.end); sMin+=m;
+      const code=roleCode(seg);
+      if(!byRole[code]) byRole[code]={min:0,ids:{},color:roleColor(seg)};
+      byRole[code].min+=m; byRole[code].ids[s.id]=1;
+      if(!byLoc[seg.loc]) byLoc[seg.loc]={min:0,ids:{}};
+      byLoc[seg.loc].min+=m; byLoc[seg.loc].ids[s.id]=1;
+      if(seg.vastaava) vastSet[s.id]=1;
+      if(seg.rh||seg.loc==='RH') rhSet[s.id]=1;
+      if(seg.suffix){ if(!sufSets[seg.suffix]) sufSets[seg.suffix]={}; sufSets[seg.suffix][s.id]=1; }
+    });
+    totalMin+=sMin;
+    if(!byType[s.code]) byType[s.code]={min:0,n:0};
+    byType[s.code].min+=sMin; byType[s.code].n++;
+    const d=new Date(s.date+'T12:00'); dowMin[(d.getDay()+6)%7]+=sMin;
+    if(t&&t.overnight) nightN++;
+    if(isWeekend(s.date)){ weN++; weMin+=sMin; }
+  });
+  /* pisin työputki (peräkkäiset päivät) */
+  const days=[...new Set(src.map(s=>s.date))].sort();
+  let streak=1, best=days.length?1:0;
+  for(let i=1;i<days.length;i++){
+    if((new Date(days[i]+'T12:00')-new Date(days[i-1]+'T12:00'))===86400000){ streak++; if(streak>best)best=streak; }
+    else streak=1;
+  }
+  const pct=m=>totalMin?Math.round(m/totalMin*100):0;
+  const cnt=o=>Object.keys(o).length;
+  const tile=(v,k)=>`<div class="tile"><div class="v">${v}</div><div class="k">${k}</div></div>`;
+
+  /* --- rakenna --- */
+  let h='<div class="tilegrid">'
+    + tile(src.length,'Vuoroa') + tile(fmtH(totalMin),'Tunteja') + tile(fmtH(totalMin/src.length),'Ø vuoro')
+    + tile(nightN,'Yövuoroa') + tile(weN,'Vkl-vuoroa') + tile(best+' pv','Pisin putki')
+    + '</div>';
+
+  /* aamu / väli / ilta / yö */
+  const byCat={};
+  Object.keys(byType).forEach(code=>{ const c=shiftCat(code); if(!c) return;
+    if(!byCat[c.id]) byCat[c.id]={min:0,n:0}; byCat[c.id].min+=byType[code].min; byCat[c.id].n+=byType[code].n; });
+  const maxC=Math.max.apply(null, SHIFT_CATS.map(c=>(byCat[c.id]||{min:0}).min).concat([1]));
+  h+='<div class="s-section">Aamu · väli · ilta · yö</div>';
+  SHIFT_CATS.forEach(c=>{ const d=byCat[c.id]||{min:0,n:0};
+    h+=`<div class="brow"><div class="l1">
+      <span class="codepill" style="background:${c.color}">${c.short}</span>
+      <span class="nm">${c.label}</span>
+      <span class="mt"><b>${d.n}</b> kpl · <b>${fmtH(d.min)}</b> · ${pct(d.min)} %</span></div>
+      <div class="bar"><i style="width:${Math.max(3,Math.round(d.min/maxC*100))}%;background:${c.color}"></i></div></div>`;
+  });
+
+  /* vuorotyypit */
+  const tRows=Object.keys(byType).map(c=>Object.assign({c},byType[c])).sort((a,b)=>b.min-a.min);
+  const maxT=Math.max.apply(null,tRows.map(r=>r.min));
+  h+='<div class="s-section">Vuorotyypit</div>';
+  tRows.forEach(r=>{
+    const t=typeByCode(r.c);
+    h+=`<div class="brow"><div class="l1">
+      <span class="codepill" style="background:${t.color}">${r.c}</span>
+      <span class="nm">${t.name}</span>
+      <span class="mt"><b>${r.n}</b> kpl · <b>${fmtH(r.min)}</b> · ${pct(r.min)} %</span></div>
+      <div class="bar"><i style="width:${Math.max(3,Math.round(r.min/maxT*100))}%;background:${t.color}"></i></div></div>`;
+  });
+
+  /* sijoitukset */
+  const lRows=Object.keys(byLoc).map(id=>({id,min:byLoc[id].min,n:cnt(byLoc[id].ids)})).sort((a,b)=>b.min-a.min);
+  const maxL=Math.max.apply(null,lRows.map(r=>r.min));
+  h+='<div class="s-section">Sijoitukset</div>';
+  lRows.forEach(r=>{
+    const l=locById(r.id), col=l?l.color:'#cbd5e1', nm=r.id==='Muu'?'Muu':r.id;
+    h+=`<div class="brow"><div class="l1">
+      <span class="codepill" style="background:${col}">${esc(nm)}</span>
+      <span class="nm"></span>
+      <span class="mt"><b>${r.n}</b> vuoroa · <b>${fmtH(r.min)}</b> · ${pct(r.min)} %</span></div>
+      <div class="bar"><i style="width:${Math.max(3,Math.round(r.min/maxL*100))}%;background:${col}"></i></div></div>`;
+  });
+
+  /* tarkat sijoituskoodit */
+  const rRows=Object.keys(byRole).map(code=>({code,min:byRole[code].min,n:cnt(byRole[code].ids),color:byRole[code].color})).sort((a,b)=>b.min-a.min);
+  const maxR=Math.max.apply(null,rRows.map(r=>r.min));
+  h+='<div class="s-section">Sijoituskoodit</div>';
+  rRows.forEach(r=>{
+    h+=`<div class="brow"><div class="l1">
+      <span class="codepill" style="background:${r.color}">${esc(r.code)}</span>
+      <span class="nm"></span>
+      <span class="mt"><b>${r.n}</b> vuoroa · <b>${fmtH(r.min)}</b> · ${pct(r.min)} %</span></div>
+      <div class="bar"><i style="width:${Math.max(3,Math.round(r.min/maxR*100))}%;background:${r.color}"></i></div></div>`;
+  });
+
+  /* erikoisroolit & lisät */
+  const chips=[];
+  if(cnt(vastSet)) chips.push(['Vastaava ( )',cnt(vastSet)]);
+  if(cnt(rhSet)) chips.push(['RH',cnt(rhSet)]);
+  Object.keys(sufSets).sort().forEach(sf=>chips.push([sf,cnt(sufSets[sf])]));
+  if(chips.length){
+    h+='<div class="s-section">Erikoisroolit & lisät</div><div>'
+      + chips.map(c=>`<span class="chipstat">${esc(c[0])} <b>×${c[1]}</b></span>`).join('')+'</div>';
+  }
+  if(weMin) h+=`<div class="hint" style="margin-top:4px;">Viikonlopputunteja ${fmtH(weMin)} (${pct(weMin)} % kaikista).</div>`;
+
+  /* viikonpäivät */
+  const maxD=Math.max.apply(null,dowMin.concat([1]));
+  const DL=['Ma','Ti','Ke','To','Pe','La','Su'];
+  h+='<div class="s-section">Tunnit viikonpäivittäin</div><div class="vchart">'
+    + dowMin.map((m,i)=>`<div class="vcol"><span class="dv">${m?Math.round(m/60):''}</span><span class="db" style="height:${Math.round(m/maxD*72)}px"></span><span class="dl">${DL[i]}</span></div>`).join('')
+    + '</div>';
+
+  /* kuukausitrendi koko historiasta */
+  if(statsScope==='all'){
+    const byM={};
+    src.forEach(s=>{ const k=s.date.slice(0,7); byM[k]=(byM[k]||0)+s.segments.reduce((a,x)=>a+dur(x.start,x.end),0); });
+    const keys=Object.keys(byM).sort().slice(-12);
+    if(keys.length>1){
+      const maxM=Math.max.apply(null,keys.map(k=>byM[k]));
+      h+='<div class="s-section">Tunnit kuukausittain</div><div class="vchart">'
+        + keys.map(k=>`<div class="vcol"><span class="dv">${Math.round(byM[k]/60)}</span><span class="db" style="height:${Math.round(byM[k]/maxM*72)}px;background:var(--good)"></span><span class="dl">${parseInt(k.slice(5,7))}/${k.slice(2,4)}</span></div>`).join('')
+        + '</div>';
+    }
+  }
+  if(skipped) h+=`<div class="hint" style="margin-top:14px;">${skipped} roolittamatonta vuoroa jätetty pois tilastoista — merkkaa roolit niin ne lasketaan mukaan.</div>`;
+  el.innerHTML=h;
+}
+document.getElementById('stRoles').onclick=()=>{ renderStats(); document.getElementById('statsSheet').classList.add('open'); };
+document.getElementById('scMonth').onclick=()=>{ statsScope='month'; renderStats(); };
+document.getElementById('scAll').onclick=()=>{ statsScope='all'; renderStats(); };
+document.getElementById('closeStats').onclick=()=>document.getElementById('statsSheet').classList.remove('open');
+
+/* ---------- Editori ---------- */
+let editingId=null, draft=null;
+
+function buildTypeGrid(){
+  const g=document.getElementById('typeGrid'); g.innerHTML='';
+  SHIFT_TYPES.forEach(t=>{
+    const we=(t.we && isWeekend(draft.date));
+    const b=document.createElement('button');
+    b.className='typebtn'+(draft.code===t.code?' sel':'');
+    b.innerHTML=`<span style="color:${t.color}">${we?t.we.code:t.code}</span><small>${we?t.we.start:t.start}</small>`;
+    b.onclick=()=>selectType(t.code); g.appendChild(b);
+  });
+}
+function selectType(code){
+  const t=typeByCode(code); draft.code=t.code;
+  let start=t.start,end=t.end;
+  if(t.we && isWeekend(draft.date)){ start=t.we.start; end=t.we.end; draft.weCode=true; } else draft.weCode=false;
+  const keep = draft.segments[0] || newSeg(start,end);
+  const first = Object.assign(newSeg(start,end), {loc:keep.loc,vastaava:keep.vastaava,suffix:keep.suffix,rh:keep.rh,custom:keep.custom});
+  // C- ja R-vuorot jaetaan oletuksena kahtia klo 14:30 (sijoitus vaihtuu yleensä silloin)
+  if(t.code==='C'||t.code==='R'){
+    first.end='14:30';
+    draft.segments=[first, Object.assign(newSeg('14:30',end), {loc:keep.loc})];
+  } else draft.segments=[first];
+  buildTypeGrid(); buildSegs(); syncMeta();
+}
+function newSeg(start,end){ return {start,end,loc:'H2',vastaava:false,suffix:'',rh:false,custom:''}; }
+function syncMeta(){ if(draft.segments.length){ draft.start=draft.segments[0].start; draft.end=draft.segments[draft.segments.length-1].end; } }
+
+function buildSegs(){
+  const c=document.getElementById('segContainer'); c.innerHTML='';
+  draft.segments.forEach((seg,i)=>{
+    const l=locById(seg.loc), room=l&&l.room, rhOk=l&&(l.room||l.rhOk);
+    const code=roleCode(seg);
+    const sufs=SUFFIXES[seg.loc]||[];
+    const box=document.createElement('div'); box.className='segedit';
+    box.innerHTML=`
+      <div class="top">
+        <span class="ttl">Osio ${i+1}
+          <span class="codepill" style="background:${roleColor(seg)}">${esc(code)}</span></span>
+        ${draft.segments.length>1?`<button class="delseg" data-i="${i}">Poista</button>`:''}
+      </div>
+      <div class="timepair">
+        <input type="time" class="sStart" data-i="${i}" value="${seg.start}">
+        <span class="ar">→</span>
+        <input type="time" class="sEnd" data-i="${i}" value="${seg.end}">
+        <span class="dh">${fmtH(dur(seg.start,seg.end))}</span>
+      </div>
+      <div class="miniL">Sijainti</div>
+      <div class="chips loc">${LOCS.map(o=>`<button class="chip ${seg.loc===o.id?'sel':''}" data-i="${i}" data-loc="${o.id}"
+          style="${seg.loc===o.id?`background:${o.color}`:''}">${o.label}</button>`).join('')}</div>
+      ${seg.loc==='Muu'?`<input type="text" class="cust" data-i="${i}" placeholder="Kirjoita rooli" value="${esc(seg.custom)}" style="margin-top:8px;">`:''}
+      ${rhOk?`
+        <div class="toggles">
+          ${room&&!l.noVastaava?`<button class="tg ${seg.vastaava?'on':''}" data-i="${i}" data-tg="vastaava">Vastaava ( )</button>`:''}
+          <button class="tg ${seg.rh?'on':''}" data-i="${i}" data-tg="rh">RH ruuhka</button>
+        </div>`:''}
+      ${sufs.length?`<div class="miniL">Erikoisrooli</div>
+        <div class="chips suf">
+          <button class="chip ${seg.suffix===''?'sel':''}" data-i="${i}" data-suf="" style="${seg.suffix===''?'background:#9aa6d4':''}">—</button>
+          ${sufs.map(sf=>`<button class="chip ${seg.suffix===sf?'sel':''}" data-i="${i}" data-suf="${sf}"
+              style="${seg.suffix===sf?'background:#fbbf24':''}">${sf}</button>`).join('')}
+        </div>`:''}`;
+    c.appendChild(box);
+  });
+  const c2=document.getElementById('segContainer');
+  c2.querySelectorAll('.sStart').forEach(el=>el.onchange=e=>{ draft.segments[+e.target.dataset.i].start=e.target.value; syncMeta(); buildSegs(); });
+  c2.querySelectorAll('.sEnd').forEach(el=>el.onchange=e=>{ draft.segments[+e.target.dataset.i].end=e.target.value; syncMeta(); buildSegs(); });
+  c2.querySelectorAll('.delseg').forEach(el=>el.onclick=e=>{ draft.segments.splice(+e.target.dataset.i,1); syncMeta(); buildSegs(); });
+  c2.querySelectorAll('.chip[data-loc]').forEach(el=>el.onclick=e=>{
+    const i=+e.currentTarget.dataset.i, seg=draft.segments[i];
+    seg.loc=e.currentTarget.dataset.loc;
+    if(!(SUFFIXES[seg.loc]||[]).includes(seg.suffix)) seg.suffix='';
+    const l=locById(seg.loc);
+    if(!l||!(l.room||l.rhOk)){ seg.rh=false; }
+    if(!l||!l.room||l.noVastaava) seg.vastaava=false;
+    buildSegs();
+  });
+  c2.querySelectorAll('.chip[data-suf]').forEach(el=>el.onclick=e=>{ draft.segments[+e.currentTarget.dataset.i].suffix=e.currentTarget.dataset.suf; buildSegs(); });
+  c2.querySelectorAll('.tg').forEach(el=>el.onclick=e=>{ const i=+e.currentTarget.dataset.i, k=e.currentTarget.dataset.tg; draft.segments[i][k]=!draft.segments[i][k]; buildSegs(); });
+  c2.querySelectorAll('.cust').forEach(el=>el.oninput=e=>{ draft.segments[+e.target.dataset.i].custom=e.target.value;
+    e.target.closest('.segedit').querySelector('.codepill').textContent=e.target.value||'?'; });
+}
+function addSeg(){
+  const last=draft.segments[draft.segments.length-1];
+  const ns=newSeg(last.end, draft.end||last.end);
+  ns.loc=last.loc;
+  draft.segments.push(ns); syncMeta(); buildSegs();
+}
+
+function openShift(id){
+  editingId=id; draft=JSON.parse(JSON.stringify(shifts.find(x=>x.id===id)));
+  document.getElementById('sheetTitle').textContent='Muokkaa vuoroa';
+  document.getElementById('deleteShift').style.display='block';
+  document.getElementById('fDate').value=draft.date;
+  buildTypeGrid(); buildSegs(); buildTraumaSection(); buildProcSection();
+  document.getElementById('shiftSheet').classList.add('open');
+}
+function openNew(){
+  editingId=null; const today=ymd(new Date());
+  draft={id:rid(), date:today, code:'A', weCode:false, segments:[], start:'', end:''};
+  document.getElementById('sheetTitle').textContent='Lisää vuoro';
+  document.getElementById('deleteShift').style.display='none';
+  document.getElementById('fDate').value=today;
+  selectType('A'); buildTraumaSection(); buildProcSection();
+  document.getElementById('shiftSheet').classList.add('open');
+}
+function closeShift(){ document.getElementById('shiftSheet').classList.remove('open'); }
+
+document.getElementById('fDate').onchange=e=>{ draft.date=e.target.value; selectType(draft.code); };
+document.getElementById('addSegBtn').onclick=addSeg;
+document.getElementById('addBtn').onclick=openNew;
+document.getElementById('cancelShift').onclick=closeShift;
+document.getElementById('saveShift').onclick=()=>{
+  syncMeta();
+  for(const s of draft.segments){ if(s.loc==='Muu' && !s.custom.trim()){ alert('Kirjoita rooli "Muu"-osiolle tai valitse sijainti.'); return; } }
+  const rec={id:editingId||draft.id||rid(), date:draft.date, code:draft.code, weCode:draft.weCode, start:draft.start, end:draft.end,
+    segments:draft.segments.map(s=>({start:s.start,end:s.end,loc:s.loc,vastaava:s.vastaava,suffix:s.suffix,rh:s.rh,custom:s.custom}))};
+  if(editingId){ shifts[shifts.findIndex(x=>x.id===editingId)]=rec; } else shifts.push(rec);
+  saveShifts(); closeShift();
+  const d=new Date(rec.date+'T12:00'); viewYear=d.getFullYear(); viewMonth=d.getMonth(); render();
+};
+document.getElementById('deleteShift').onclick=()=>{ if(confirm('Poistetaanko tämä vuoro?')){ shifts=shifts.filter(x=>x.id!==editingId); saveShifts(); closeShift(); render(); } };
+
+document.getElementById('prevM').onclick=()=>{ if(--viewMonth<0){viewMonth=11;viewYear--;} render(); };
+document.getElementById('nextM').onclick=()=>{ if(++viewMonth>11){viewMonth=0;viewYear++;} render(); };
+
+/* ---------- Vienti ---------- */
+document.getElementById('exportBtn').onclick=()=>{
+  const blob=new Blob([JSON.stringify({shifts,traumas,procs,exported:new Date().toISOString()},null,2)],{type:'application/json'});
+  const url=URL.createObjectURL(blob); const a=document.createElement('a');
+  a.href=url; a.download='meikkulog-varmuuskopio.json'; a.click(); setTimeout(()=>URL.revokeObjectURL(url),1000);
+};
+
+/* ---------- Tuonti ---------- */
+function migrateShift(s){
+  s.segments=(s.segments||[]).map(seg=>{
+    if(seg.loc) return seg;
+    return {start:seg.start,end:seg.end,loc:'Muu',vastaava:false,suffix:'',rh:false,custom:seg.custom||'?'};
+  });
+  return s;
+}
+function restoreJSON(obj){
+  if(!obj || !Array.isArray(obj.shifts)) throw new Error('bad');
+  if(!confirm('Korvataanko nykyiset vuorot varmuuskopiolla ('+obj.shifts.length+' vuoroa)?')) return null;
+  shifts=obj.shifts.map(migrateShift); saveShifts();
+  if(Array.isArray(obj.traumas)){ traumas=obj.traumas; saveTraumas(); }
+  if(Array.isArray(obj.procs)){ procs=obj.procs; saveProcs(); }
+  render();
+  return obj.shifts.length;
+}
+function importLines(text){
+  let added=0, replaced=0; const errors=[];
+  text.split(/\r?\n/).forEach((raw,idx)=>{
+    const line=raw.trim(); if(!line || line.startsWith('#')) return;
+    let date=null, rest=null, m;
+    if((m=line.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})\s+(.*)$/))){ date=m[3]+'-'+pad2(m[2])+'-'+pad2(m[1]); rest=m[4]; }
+    else if((m=line.match(/^(\d{4}-\d{2}-\d{2})\s+(.*)$/))){ date=m[1]; rest=m[2]; }
+    if(!date){ errors.push('Rivi '+(idx+1)+': päivämäärää ei tunnistettu'); return; }
+    const tm=rest.match(/^(\S+)\s*(.*)$/);
+    const t=tm?typeByCode(tm[1]):null;
+    if(!t){ errors.push('Rivi '+(idx+1)+': tuntematon vuorokoodi "'+(tm?tm[1]:'')+'"'); return; }
+    const we=t.we&&isWeekend(date);
+    const defStart=we?t.we.start:t.start, defEnd=we?t.we.end:t.end;
+    const segsTxt=(tm[2]||'').trim();
+    let segments=[];
+    if(!segsTxt){
+      if(t.code==='C'||t.code==='R') segments=[Object.assign({start:defStart,end:'14:30'},parseRole('')), Object.assign({start:'14:30',end:defEnd},parseRole(''))];
+      else segments=[Object.assign({start:defStart,end:defEnd},parseRole(''))];
+    }
+    else{
+      segsTxt.split(';').forEach(part=>{
+        part=part.trim(); if(!part) return;
+        const sm=part.match(/^(\d{1,2}[:.]\d{2})\s*[-–]\s*(\d{1,2}[:.]\d{2})\s*(.*)$/);
+        if(sm) segments.push(Object.assign({start:normTime(sm[1]),end:normTime(sm[2])},parseRole(sm[3])));
+        else segments.push(Object.assign({start:defStart,end:defEnd},parseRole(part)));
+      });
+    }
+    if(!segments.length){ errors.push('Rivi '+(idx+1)+': ei osioita'); return; }
+    const rec={id:rid(),date,code:t.code,weCode:!!t.we,start:segments[0].start,end:segments[segments.length-1].end,segments};
+    const ex=shifts.findIndex(x=>x.date===date);
+    if(ex>=0){ rec.id=shifts[ex].id; shifts[ex]=rec; replaced++; } else { shifts.push(rec); added++; }
+  });
+  saveShifts(); render();
+  return {added,replaced,errors};
+}
+function showImpMsg(txt){ const el=document.getElementById('impMsg'); el.textContent=txt; el.style.display='block'; }
+
+document.getElementById('importBtn').onclick=()=>{ document.getElementById('impMsg').style.display='none'; document.getElementById('importSheet').classList.add('open'); };
+document.getElementById('closeImport').onclick=()=>document.getElementById('importSheet').classList.remove('open');
+document.getElementById('impFile').onchange=e=>{
+  const f=e.target.files[0]; if(!f) return;
+  const r=new FileReader();
+  r.onload=()=>{ try{
+      const n=restoreJSON(JSON.parse(r.result));
+      if(n!==null) showImpMsg('Palautettu '+n+' vuoroa varmuuskopiosta.');
+    }catch(err){ showImpMsg('Tiedostoa ei voitu lukea — onko se varmuuskopio-JSON?'); } };
+  r.readAsText(f); e.target.value='';
+};
+document.getElementById('impGo').onclick=()=>{
+  const txt=document.getElementById('impText').value.trim();
+  if(!txt){ showImpMsg('Liitä ensin koodi tekstikenttään.'); return; }
+  if(txt.startsWith('{')){
+    try{ const n=restoreJSON(JSON.parse(txt)); if(n!==null) showImpMsg('Palautettu '+n+' vuoroa varmuuskopiosta.'); }
+    catch(err){ showImpMsg('JSON-sisältöä ei voitu lukea.'); }
+    return;
+  }
+  const res=importLines(txt);
+  let msg='Tuotu '+res.added+' uutta vuoroa'+(res.replaced?', korvattu '+res.replaced:'')+'.';
+  if(res.errors.length) msg+='\n'+res.errors.join('\n');
+  showImpMsg(msg);
+  if(res.added||res.replaced) document.getElementById('impText').value='';
+};
+
+/* ---------- Traumapotilaat: kirjaus & päiväkirja ---------- */
+let editingTraumaId=null, traumaDraft=null, traumaReturnTo=null;
+
+function shiftTraumaBadge(shiftId){
+  const list=traumas.filter(t=>t.shiftId===shiftId);
+  if(!list.length) return '';
+  return '<div style="margin-top:8px; display:flex; flex-wrap:wrap; gap:5px;">'
+    + list.map(t=>{ const tt=traumaTypeById(t.type);
+        return `<span class="traumatag" style="background:${tt.color}">${tt.short}${t.age?' · '+esc(t.age):''}</span>`; }).join('')
+    + '</div>';
+}
+function traumaRowHTML(t){
+  const tt=traumaTypeById(t.type);
+  const d=new Date(t.date+'T12:00');
+  const dl=d.getDate()+'.'+(d.getMonth()+1)+'.';
+  return `<div class="trow" data-tid="${t.id}">
+    <div class="th"><span class="tb" style="background:${tt.color}">${tt.label}</span>
+      ${t.age?`<span class="tage">${esc(t.age)}</span>`:''}
+      <span class="td">${dl}</span></div>
+    ${t.mechanism?`<div class="tmech">${esc(t.mechanism)}</div>`:''}
+    ${t.injuries?`<div class="tinj">${esc(t.injuries)}</div>`:''}
+    ${t.role?`<div class="tnote">Rooli: ${esc(t.role)}</div>`:''}
+    ${t.notes?`<div class="tnote">${esc(t.notes)}</div>`:''}
+  </div>`;
+}
+
+/* Osio vuoron muokkaimessa */
+function buildTraumaSection(){
+  const c=document.getElementById('traumaSection'); if(!c||!draft) return;
+  const list=traumas.filter(t=>t.shiftId===draft.id).sort((a,b)=>(a.created||0)-(b.created||0));
+  let h='';
+  if(shiftHasTraumaRole(draft)) h+='<div class="traumahint">Erikoisrooli vuorossa — kirjaa trauma-, raptor- ja muut hätätilapotilaat tähän vuoron aikana.</div>';
+  h+=list.map(traumaRowHTML).join('');
+  c.innerHTML=h;
+  c.querySelectorAll('.trow').forEach(el=>el.onclick=()=>openTrauma(el.dataset.tid,'shift'));
+}
+
+/* Editori */
+function buildTraumaTypeGrid(){
+  const g=document.getElementById('tTypeGrid'); g.innerHTML='';
+  TRAUMA_TYPES.forEach(t=>{
+    const b=document.createElement('button');
+    b.className='ttbtn'+(traumaDraft.type===t.id?' sel':'');
+    b.innerHTML=`<span class="dot" style="background:${t.color}"></span>${t.label}`;
+    b.onclick=()=>{ traumaDraft.type=t.id; buildTraumaTypeGrid(); };
+    g.appendChild(b);
+  });
+}
+function buildTraumaRoleChips(){
+  const c=document.getElementById('tRoleChips');
+  c.innerHTML=PATIENT_ROLES.map(r=>`<button class="chip ${traumaDraft.role===r?'sel':''}" data-role="${r}"
+     style="${traumaDraft.role===r?'background:#4f8cff;color:#fff':''}">${r}</button>`).join('');
+  c.querySelectorAll('.chip').forEach(el=>el.onclick=()=>{
+    traumaDraft.role = (traumaDraft.role===el.dataset.role ? '' : el.dataset.role); buildTraumaRoleChips(); });
+}
+function fillTraumaForm(){
+  document.getElementById('tDate').value=traumaDraft.date;
+  document.getElementById('tAge').value=traumaDraft.age||'';
+  document.getElementById('tMech').value=traumaDraft.mechanism||'';
+  document.getElementById('tInj').value=traumaDraft.injuries||'';
+  document.getElementById('tNotes').value=traumaDraft.notes||'';
+  traumaDraft.role=canonRole(traumaDraft.role);
+  buildTraumaTypeGrid(); buildTraumaRoleChips();
+}
+function openTrauma(id, returnTo){
+  editingTraumaId=id; traumaReturnTo=returnTo;
+  traumaDraft=JSON.parse(JSON.stringify(traumas.find(t=>t.id===id)));
+  document.getElementById('traumaTitle').textContent='Muokkaa potilasta';
+  document.getElementById('deleteTrauma').style.display='block';
+  fillTraumaForm(); document.getElementById('traumaSheet').classList.add('open');
+}
+function openNewTrauma(pre, returnTo){
+  editingTraumaId=null; traumaReturnTo=returnTo;
+  traumaDraft=Object.assign({id:null, shiftId:null, date:ymd(new Date()), type:'traumahalytys',
+    age:'', mechanism:'', injuries:'', role:'', notes:''}, pre||{});
+  document.getElementById('traumaTitle').textContent='Uusi potilas';
+  document.getElementById('deleteTrauma').style.display='none';
+  fillTraumaForm(); document.getElementById('traumaSheet').classList.add('open');
+}
+function closeTrauma(){
+  document.getElementById('traumaSheet').classList.remove('open');
+  if(traumaReturnTo==='shift') buildTraumaSection();
+  else if(traumaReturnTo==='log') renderLog();
+  render();
+}
+document.getElementById('cancelTrauma').onclick=closeTrauma;
+document.getElementById('saveTrauma').onclick=()=>{
+  traumaDraft.date=document.getElementById('tDate').value||traumaDraft.date;
+  traumaDraft.age=document.getElementById('tAge').value.trim();
+  traumaDraft.mechanism=document.getElementById('tMech').value.trim();
+  traumaDraft.injuries=document.getElementById('tInj').value.trim();
+  traumaDraft.notes=document.getElementById('tNotes').value.trim();
+  if(!traumaDraft.mechanism && !traumaDraft.injuries && !traumaDraft.age && !traumaDraft.notes){
+    alert('Täytä ainakin vammamekanismi, vammat tai ikä.'); return;
+  }
+  if(editingTraumaId){ traumas[traumas.findIndex(t=>t.id===editingTraumaId)]=traumaDraft; }
+  else { traumaDraft.id=rid(); traumaDraft.created=Date.now(); traumas.push(traumaDraft); }
+  saveTraumas(); closeTrauma();
+};
+document.getElementById('deleteTrauma').onclick=()=>{
+  if(confirm('Poistetaanko tämä potilas?')){ traumas=traumas.filter(t=>t.id!==editingTraumaId); saveTraumas(); closeTrauma(); }
+};
+document.getElementById('addTraumaBtn').onclick=()=>{
+  if(!draft) return;
+  openNewTrauma({date:draft.date, shiftId:draft.id, role:traumaRolePrefill(draft)}, 'shift');
+};
+
+/* Päiväkirja — potilaat */
+function renderPatientLog(){
+  const all=traumas.slice().sort((a,b)=> a.date<b.date?1 : a.date>b.date?-1 : (b.created||0)-(a.created||0));
+  const stats=document.getElementById('logStats'), list=document.getElementById('logList');
+  if(!all.length){
+    stats.innerHTML='';
+    list.innerHTML='<div class="empty"><div class="big">🩺</div>Ei kirjattuja potilaita.<br>Lisää + napista tai vuoron muokkauksesta.</div>';
+    return;
+  }
+  const counts={}; all.forEach(t=>counts[t.type]=(counts[t.type]||0)+1);
+  const grp=g=>TRAUMA_TYPES.filter(t=>t.group===g).reduce((a,t)=>a+(counts[t.id]||0),0);
+  const tile=(v,k)=>`<div class="tile"><div class="v">${v}</div><div class="k">${k}</div></div>`;
+  const pc=n=>Math.round(n/all.length*100);
+
+  /* yhteenvetolaatat */
+  let st='<div class="tilegrid">'
+    + tile(all.length,'Potilasta')
+    + tile(counts['traumahalytys']||0,'Traumahäly')
+    + tile((counts['raptor_vakaa']||0)+(counts['raptor_instabiili']||0),'Raptor')
+    + tile(grp('Muu hätä'),'Muu hätä')
+    + '</div>';
+
+  /* tyypeittäin palkein */
+  const tRows=TRAUMA_TYPES.filter(t=>counts[t.id]).map(t=>Object.assign({},t,{n:counts[t.id]})).sort((a,b)=>b.n-a.n);
+  const maxN=Math.max.apply(null,tRows.map(r=>r.n).concat([1]));
+  st+='<div class="s-section">Tyypeittäin</div>';
+  tRows.forEach(r=>{ st+=`<div class="brow"><div class="l1">
+    <span class="codepill" style="background:${r.color}">${esc(r.short)}</span>
+    <span class="nm">${esc(r.label)}</span>
+    <span class="mt"><b>${r.n}</b> kpl · ${pc(r.n)} %</span></div>
+    <div class="bar"><i style="width:${Math.max(3,Math.round(r.n/maxN*100))}%;background:${r.color}"></i></div></div>`; });
+
+  /* potilaat kuukausittain */
+  const byM={}; all.forEach(t=>{ const k=t.date.slice(0,7); byM[k]=(byM[k]||0)+1; });
+  const mkeys=Object.keys(byM).sort().slice(-12);
+  if(mkeys.length>1){
+    const maxM=Math.max.apply(null,mkeys.map(k=>byM[k]));
+    st+='<div class="s-section">Potilaat kuukausittain</div><div class="vchart">'
+      + mkeys.map(k=>`<div class="vcol"><span class="dv">${byM[k]}</span><span class="db" style="height:${Math.round(byM[k]/maxM*72)}px;background:#f87171"></span><span class="dl">${parseInt(k.slice(5,7))}/${k.slice(2,4)}</span></div>`).join('')
+      + '</div>';
+  }
+
+  /* roolit */
+  const byRole={}; all.forEach(t=>{ const r=(t.role||'').trim(); if(r) byRole[r]=(byRole[r]||0)+1; });
+  const rkeys=Object.keys(byRole).sort((a,b)=>byRole[b]-byRole[a]);
+  if(rkeys.length){
+    st+='<div class="s-section">Roolit kirjauksissa</div><div>'
+      + rkeys.map(r=>`<span class="chipstat">${esc(r)} <b>×${byRole[r]}</b></span>`).join('')+'</div>';
+  }
+
+  /* traumahälytykset vs. traumatiimivuorot */
+  const alerts=all.filter(t=>traumaTypeById(t.type).group==='Trauma');
+  const teamShifts=shifts.filter(shiftHasTraumaRole);
+  const taTotal=alerts.length, tsTotal=teamShifts.length;
+  if(taTotal||tsTotal){
+    const taByM={}, tsByM={};
+    alerts.forEach(t=>{ const k=t.date.slice(0,7); taByM[k]=(taByM[k]||0)+1; });
+    teamShifts.forEach(s=>{ const k=s.date.slice(0,7); tsByM[k]=(tsByM[k]||0)+1; });
+    const mset={}; Object.keys(taByM).forEach(k=>mset[k]=1); Object.keys(tsByM).forEach(k=>mset[k]=1);
+    const months=Object.keys(mset).sort().reverse().slice(0,12);
+    const maxBoth=Math.max.apply(null, months.map(m=>Math.max(taByM[m]||0,tsByM[m]||0)).concat([1]));
+    const ratio=tsTotal?(Math.round(taTotal/tsTotal*100)/100).toString().replace('.',','):'–';
+    st+='<div class="s-section">Traumahälytykset vs. traumatiimivuorot</div>';
+    st+='<div class="tilegrid">'
+      + tile(taTotal,'Traumahäly')
+      + tile(tsTotal,'Tiimivuoroa')
+      + tile(ratio,'Ø / vuoro')
+      + '</div>';
+    months.forEach(m=>{ const ta=taByM[m]||0, ts=tsByM[m]||0; const ml=MONTHS[parseInt(m.slice(5,7))-1]+' '+m.slice(0,4);
+      st+=`<div class="brow"><div class="l1">
+        <span class="nm" style="text-transform:capitalize;">${ml}</span>
+        <span class="mt"><b style="color:#f87171;">${ta}</b> tr · <b style="color:#4f8cff;">${ts}</b> vuoroa</span></div>
+        <div class="bar" style="margin-top:6px;"><i style="width:${Math.max(3,Math.round(ta/maxBoth*100))}%;background:#f87171"></i></div>
+        <div class="bar" style="margin-top:4px;"><i style="width:${Math.max(3,Math.round(ts/maxBoth*100))}%;background:#4f8cff"></i></div></div>`; });
+    st+='<div class="hint" style="margin-top:4px;"><span style="color:#f87171;">■</span> traumahälytykset · <span style="color:#4f8cff;">■</span> traumatiimivuorot</div>';
+
+    /* tiimivuorot rooleittain */
+    const roleCol={Traumahoitaja:'#fca5a5',Ane1:'#fdba74',Ane2:'#fcd34d',AMBreboa:'#f9a8d4'};
+    const teamByRole={}; PATIENT_ROLES.forEach(r=>teamByRole[r]=0);
+    teamShifts.forEach(s=>{ const r=traumaRolePrefill(s); if(teamByRole[r]!==undefined) teamByRole[r]++; });
+    const maxRole=Math.max.apply(null, PATIENT_ROLES.map(r=>teamByRole[r]).concat([1]));
+    st+='<div class="s-section">Traumatiimivuorot rooleittain</div>';
+    PATIENT_ROLES.forEach(r=>{ const n=teamByRole[r];
+      st+=`<div class="brow"><div class="l1">
+        <span class="codepill" style="background:${roleCol[r]}">${r}</span>
+        <span class="nm"></span>
+        <span class="mt"><b>${n}</b> vuoroa</span></div>
+        <div class="bar"><i style="width:${Math.max(3,Math.round(n/maxRole*100))}%;background:${roleCol[r]}"></i></div></div>`; });
+    st+='<div class="hint" style="margin-top:4px;">AMBreboa osallistuu vain Raptor-hälytyksiin, jotka ovat myös traumahälytyksiä.</div>';
+  }
+
+  st+='<div class="s-section">Kirjaukset</div>';
+  stats.innerHTML=st;
+
+  let h='', curM='';
+  all.forEach(t=>{
+    const d=new Date(t.date+'T12:00'); const mk=MONTHS[d.getMonth()]+' '+d.getFullYear();
+    if(mk!==curM){ curM=mk; h+=`<div class="logmonth">${mk}</div>`; }
+    h+=traumaRowHTML(t);
+  });
+  list.innerHTML=h;
+  list.querySelectorAll('.trow').forEach(el=>el.onclick=()=>openTrauma(el.dataset.tid,'log'));
+}
+/* ---------- Toimenpiteet & hälytykset: kirjaus & tilastot ---------- */
+let editingProcId=null, procDraft=null, procReturnTo=null;
+
+function shiftProcBadge(shiftId){
+  const list=procs.filter(p=>p.shiftId===shiftId);
+  if(!list.length) return '';
+  return '<div style="margin-top:6px; display:flex; flex-wrap:wrap; gap:5px;">'
+    + list.map(p=>{ const pt=procTypeById(p.type);
+        return `<span class="traumatag" style="background:${pt.color}">${pt.short}</span>`; }).join('')
+    + '</div>';
+}
+function procRowHTML(p){
+  const pt=procTypeById(p.type);
+  const d=new Date(p.date+'T12:00'); const dl=d.getDate()+'.'+(d.getMonth()+1)+'.';
+  const oc=p.outcome?outcomeById(p.outcome):null;
+  return `<div class="trow" data-pid="${p.id}">
+    <div class="th"><span class="tb" style="background:${pt.color}">${pt.label}</span>
+      ${p.room?`<span class="tage">${esc(procRoomById(p.room).label)}</span>`:''}
+      <span class="td">${dl}</span></div>
+    ${oc?`<div style="margin:2px 0 4px;"><span class="traumatag" style="background:${oc.color}">${oc.label}</span></div>`:''}
+    ${p.notes?`<div class="tinj">${esc(p.notes)}</div>`:''}
+  </div>`;
+}
+function buildProcSection(){
+  const c=document.getElementById('procSection'); if(!c||!draft) return;
+  const list=procs.filter(p=>p.shiftId===draft.id).sort((a,b)=>(a.created||0)-(b.created||0));
+  c.innerHTML=list.map(procRowHTML).join('');
+  c.querySelectorAll('.trow').forEach(el=>el.onclick=()=>openProc(el.dataset.pid,'shift'));
+}
+
+/* Editori */
+function buildProcTypeGrid(){
+  const g=document.getElementById('pTypeGrid'); g.innerHTML='';
+  PROC_TYPES.forEach(p=>{
+    const b=document.createElement('button');
+    b.className='ttbtn'+(procDraft.type===p.id?' sel':'');
+    b.innerHTML=`<span class="dot" style="background:${p.color}"></span>${p.label}`;
+    b.onclick=()=>{ procDraft.type=p.id;
+      if(!procTypeById(p.id).cannula) procDraft.outcome=''; else if(!procDraft.outcome) procDraft.outcome='ua_tarvittu';
+      buildProcTypeGrid(); buildProcOutcome(); };
+    g.appendChild(b);
+  });
+}
+function buildProcOutcome(){
+  const wrap=document.getElementById('pOutcomeWrap'), g=document.getElementById('pOutcomeGrid');
+  const isC=procTypeById(procDraft.type).cannula;
+  wrap.style.display=isC?'block':'none';
+  if(!isC) return;
+  g.innerHTML='';
+  CANNULA_OUTCOMES.forEach(o=>{
+    const b=document.createElement('button');
+    b.className='ttbtn'+(procDraft.outcome===o.id?' sel':'');
+    b.innerHTML=`<span class="dot" style="background:${o.color}"></span>${o.label}`;
+    b.onclick=()=>{ procDraft.outcome=o.id; buildProcOutcome(); };
+    g.appendChild(b);
+  });
+}
+function buildProcRoomChips(){
+  const c=document.getElementById('pRoomChips');
+  c.innerHTML=PROC_ROOMS.map(l=>`<button class="chip ${procDraft.room===l.id?'sel':''}" data-room="${l.id}"
+      style="${procDraft.room===l.id?`background:${l.color}`:''}">${esc(l.label)}</button>`).join('');
+  c.querySelectorAll('.chip').forEach(el=>el.onclick=()=>{ procDraft.room=el.dataset.room; buildProcRoomChips(); });
+}
+function fillProcForm(){
+  document.getElementById('pDate').value=procDraft.date;
+  document.getElementById('pNotes').value=procDraft.notes||'';
+  buildProcTypeGrid(); buildProcOutcome(); buildProcRoomChips();
+}
+function openProc(id, returnTo){
+  editingProcId=id; procReturnTo=returnTo;
+  procDraft=JSON.parse(JSON.stringify(procs.find(p=>p.id===id)));
+  document.getElementById('procTitle').textContent='Muokkaa toimenpidettä';
+  document.getElementById('deleteProc').style.display='block';
+  fillProcForm(); document.getElementById('procSheet').classList.add('open');
+}
+function openNewProc(pre, returnTo){
+  editingProcId=null; procReturnTo=returnTo;
+  procDraft=Object.assign({id:null, shiftId:null, date:ymd(new Date()), type:'intubaatio', room:'H2', outcome:'', notes:''}, pre||{});
+  document.getElementById('procTitle').textContent='Uusi toimenpide';
+  document.getElementById('deleteProc').style.display='none';
+  fillProcForm(); document.getElementById('procSheet').classList.add('open');
+}
+function closeProc(){
+  document.getElementById('procSheet').classList.remove('open');
+  if(procReturnTo==='shift') buildProcSection();
+  else if(procReturnTo==='log') renderLog();
+  render();
+}
+document.getElementById('cancelProc').onclick=closeProc;
+document.getElementById('saveProc').onclick=()=>{
+  procDraft.date=document.getElementById('pDate').value||procDraft.date;
+  procDraft.notes=document.getElementById('pNotes').value.trim();
+  if(!procTypeById(procDraft.type).cannula) procDraft.outcome='';
+  if(editingProcId){ procs[procs.findIndex(p=>p.id===editingProcId)]=procDraft; }
+  else { procDraft.id=rid(); procDraft.created=Date.now(); procs.push(procDraft); }
+  saveProcs(); closeProc();
+};
+document.getElementById('deleteProc').onclick=()=>{
+  if(confirm('Poistetaanko tämä toimenpide?')){ procs=procs.filter(p=>p.id!==editingProcId); saveProcs(); closeProc(); }
+};
+document.getElementById('addProcBtn').onclick=()=>{
+  if(!draft) return;
+  const room=(draft.segments&&draft.segments[0]&&draft.segments[0].loc)||'H2';
+  openNewProc({date:draft.date, shiftId:draft.id, room}, 'shift');
+};
+
+/* Päiväkirja — toimenpiteet */
+function renderProcLog(){
+  const all=procs.slice().sort((a,b)=> a.date<b.date?1 : a.date>b.date?-1 : (b.created||0)-(a.created||0));
+  const stats=document.getElementById('logStats'), list=document.getElementById('logList');
+  if(!all.length){
+    stats.innerHTML='';
+    list.innerHTML='<div class="empty"><div class="big">💉</div>Ei kirjattuja toimenpiteitä.<br>Lisää + napista tai vuoron muokkauksesta.</div>';
+    return;
+  }
+  const counts={}; all.forEach(p=>counts[p.type]=(counts[p.type]||0)+1);
+  const tile=(v,k)=>`<div class="tile"><div class="v">${v}</div><div class="k">${k}</div></div>`;
+  const cans=all.filter(p=>procTypeById(p.type).cannula);
+  const oc={}; cans.forEach(p=>oc[p.outcome]=(oc[p.outcome]||0)+1);
+  const placed=(oc['ua_tarvittu']||0)+(oc['ilman_ua']||0);
+
+  let st='<div class="tilegrid">'
+    + tile(all.length,'Toimenpidettä')
+    + tile(counts['intubaatio']||0,'Intubaatio')
+    + tile(counts['stroke']||0,'STROKE')
+    + tile(cans.length,'UÄ-kanyyli')
+    + '</div>';
+
+  /* tyypeittäin */
+  const tRows=PROC_TYPES.filter(p=>counts[p.id]).map(p=>Object.assign({},p,{n:counts[p.id]})).sort((a,b)=>b.n-a.n);
+  const maxN=Math.max.apply(null,tRows.map(r=>r.n).concat([1]));
+  st+='<div class="s-section">Tyypeittäin</div>';
+  tRows.forEach(r=>{ st+=`<div class="brow"><div class="l1">
+    <span class="codepill" style="background:${r.color}">${esc(r.short)}</span>
+    <span class="nm">${esc(r.label)}</span>
+    <span class="mt"><b>${r.n}</b> kpl</span></div>
+    <div class="bar"><i style="width:${Math.max(3,Math.round(r.n/maxN*100))}%;background:${r.color}"></i></div></div>`; });
+
+  /* huoneittain */
+  const byRoom={}; all.forEach(p=>{ const r=p.room||'?'; byRoom[r]=(byRoom[r]||0)+1; });
+  const roomRows=Object.keys(byRoom).map(r=>({r,n:byRoom[r]})).sort((a,b)=>b.n-a.n);
+  const maxRoom=Math.max.apply(null,roomRows.map(x=>x.n).concat([1]));
+  st+='<div class="s-section">Huoneittain</div>';
+  roomRows.forEach(x=>{ const l=procRoomById(x.r), col=l.color;
+    st+=`<div class="brow"><div class="l1">
+      <span class="codepill" style="background:${col}">${esc(l.label)}</span>
+      <span class="nm"></span>
+      <span class="mt"><b>${x.n}</b> kpl</span></div>
+      <div class="bar"><i style="width:${Math.max(3,Math.round(x.n/maxRoom*100))}%;background:${col}"></i></div></div>`; });
+
+  /* UÄ-perifeeriset kanyylit erikseen */
+  if(cans.length){
+    st+='<div class="s-section">UÄ-perifeeriset kanyylit</div>';
+    st+='<div class="tilegrid">'
+      + tile(cans.length,'Yritystä')
+      + tile(placed,'Onnistui')
+      + tile(placed?Math.round(placed/cans.length*100)+' %':'–','Onnistumis-%')
+      + '</div>';
+    st+='<div style="margin-top:8px;">'+CANNULA_OUTCOMES.filter(o=>oc[o.id]).map(o=>
+      `<span class="chipstat"><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${o.color}"></span> ${o.label} <b>×${oc[o.id]}</b></span>`).join('')+'</div>';
+
+    /* UÄ-kanyylit huoneittain — painotus siihen missä UÄ:ta oikeasti tarvittiin */
+    const canByRoom={};
+    cans.forEach(p=>{ const r=p.room||'?'; if(!canByRoom[r]) canByRoom[r]={n:0,ua:0,fail:0};
+      canByRoom[r].n++; if(p.outcome==='ua_tarvittu') canByRoom[r].ua++; if(p.outcome==='ei_onnistunut') canByRoom[r].fail++; });
+    const canRows=Object.keys(canByRoom).map(r=>Object.assign({r},canByRoom[r])).sort((a,b)=> b.ua-a.ua || b.n-a.n);
+    const maxUa=Math.max.apply(null,canRows.map(x=>x.ua).concat([1]));
+    st+='<div class="miniL" style="margin:12px 2px 2px;">Huoneittain — UÄ tarvittiin</div>';
+    canRows.forEach(x=>{ const l=procRoomById(x.r);
+      st+=`<div class="brow"><div class="l1">
+        <span class="codepill" style="background:${l.color}">${esc(l.label)}</span>
+        <span class="nm"></span>
+        <span class="mt">UÄ <b>${x.ua}</b> / ${x.n} kpl${x.fail?` · ei onnist. ${x.fail}`:''}</span></div>
+        <div class="bar"><i style="width:${Math.max(3,Math.round(x.ua/maxUa*100))}%;background:#34d399"></i></div></div>`; });
+  }
+  st+='<div class="s-section">Kirjaukset</div>';
+  stats.innerHTML=st;
+
+  let h='', curM='';
+  all.forEach(p=>{ const d=new Date(p.date+'T12:00'); const mk=MONTHS[d.getMonth()]+' '+d.getFullYear();
+    if(mk!==curM){ curM=mk; h+=`<div class="logmonth">${mk}</div>`; }
+    h+=procRowHTML(p); });
+  list.innerHTML=h;
+  list.querySelectorAll('.trow').forEach(el=>el.onclick=()=>openProc(el.dataset.pid,'log'));
+}
+
+/* Loki: välilehdet potilaat / toimenpiteet */
+let logTab='patients';
+function renderLog(){
+  document.getElementById('tabPatients').classList.toggle('on', logTab==='patients');
+  document.getElementById('tabProcs').classList.toggle('on', logTab==='procs');
+  document.getElementById('logTitle').textContent = logTab==='procs' ? 'Toimenpiteet & hälytykset' : 'Hätätilapotilaat';
+  document.getElementById('addLogItem').textContent = logTab==='procs' ? '+ Lisää toimenpide' : '+ Lisää potilas';
+  if(logTab==='procs') renderProcLog(); else renderPatientLog();
+}
+document.getElementById('logBtn').onclick=()=>{ renderLog(); document.getElementById('logSheet').classList.add('open'); };
+document.getElementById('closeLog').onclick=()=>document.getElementById('logSheet').classList.remove('open');
+document.getElementById('tabPatients').onclick=()=>{ logTab='patients'; renderLog(); };
+document.getElementById('tabProcs').onclick=()=>{ logTab='procs'; renderLog(); };
+document.getElementById('addLogItem').onclick=()=>{ if(logTab==='procs') openNewProc({}, 'log'); else openNewTrauma({}, 'log'); };
+
+document.querySelectorAll('.sheet').forEach(sh=>sh.addEventListener('click',e=>{ if(e.target===sh) sh.classList.remove('open'); }));
+
+render();
+</script>
+</body>
+</html>
