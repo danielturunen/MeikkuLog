@@ -46,6 +46,7 @@
   .shift{display:flex; gap:12px; align-items:stretch; background:var(--card); border:1px solid var(--line);
     border-radius:var(--r); padding:12px; margin-bottom:8px; position:relative; overflow:hidden;}
   .shift:active{background:var(--card2);}
+  .shift.past{opacity:.45;}
   .badge{min-width:46px; border-radius:12px; display:grid; place-items:center; font-weight:800; color:#06122b; padding:6px 4px;}
   .badge .code{font-size:22px; line-height:1;}
   .shift .body{flex:1; min-width:0;}
@@ -627,13 +628,13 @@ function render(){
         ${shiftTraumaBadge(s.id)}
         ${shiftProcBadge(s.id)}
       </div>`;
+    const past=shiftIsPast(s);
+    if(past) card.classList.add('past');
     card.onclick=()=>openShift(s.id);
-    card.dataset.shiftId=s.id;
     const wrap=document.createElement('div'); wrap.className='day';
     wrap.innerHTML=`<div class="daylabel" style="margin-top:0">${dayLbl}</div>`;
     wrap.appendChild(card); list.appendChild(wrap);
   });
-  scrollToCurrent(inMonth);
 }
 
 function shiftRealEnd(s){
@@ -647,19 +648,8 @@ function shiftRealEnd(s){
   return d;
 }
 
-function scrollToCurrent(inMonth){
-  if(!inMonth.length) return;
-  const now=new Date();
-  const thisMonth=now.getFullYear()===viewYear && now.getMonth()===viewMonth;
-  if(!thisMonth) return;
-  let target=null;
-  for(const s of inMonth){
-    const realEnd=shiftRealEnd(s);
-    if(now<=realEnd){ target=s.id; break; }
-  }
-  if(!target) target=inMonth[inMonth.length-1].id;
-  const el=document.querySelector(`.shift[data-shift-id="${target}"]`);
-  if(el) requestAnimationFrame(()=>el.scrollIntoView({block:'center',behavior:'smooth'}));
+function shiftIsPast(s){
+  return new Date() > shiftRealEnd(s);
 }
 
 /* ---------- Roolitilastot ---------- */
