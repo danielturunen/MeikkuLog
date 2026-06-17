@@ -628,10 +628,38 @@ function render(){
         ${shiftProcBadge(s.id)}
       </div>`;
     card.onclick=()=>openShift(s.id);
+    card.dataset.shiftId=s.id;
     const wrap=document.createElement('div'); wrap.className='day';
     wrap.innerHTML=`<div class="daylabel" style="margin-top:0">${dayLbl}</div>`;
     wrap.appendChild(card); list.appendChild(wrap);
   });
+  scrollToCurrent(inMonth);
+}
+
+function shiftRealEnd(s){
+  const t=typeByCode(s.code);
+  const end=s.end||s.segments[s.segments.length-1].end;
+  const endMin=toMin(end);
+  const startMin=toMin(s.start||s.segments[0].start);
+  const overnight=t&&t.overnight || endMin<=startMin;
+  const d=new Date(s.date+'T'+end);
+  if(overnight) d.setDate(d.getDate()+1);
+  return d;
+}
+
+function scrollToCurrent(inMonth){
+  if(!inMonth.length) return;
+  const now=new Date();
+  const thisMonth=now.getFullYear()===viewYear && now.getMonth()===viewMonth;
+  if(!thisMonth) return;
+  let target=null;
+  for(const s of inMonth){
+    const realEnd=shiftRealEnd(s);
+    if(now<=realEnd){ target=s.id; break; }
+  }
+  if(!target) target=inMonth[inMonth.length-1].id;
+  const el=document.querySelector(`.shift[data-shift-id="${target}"]`);
+  if(el) requestAnimationFrame(()=>el.scrollIntoView({block:'center',behavior:'smooth'}));
 }
 
 /* ---------- Roolitilastot ---------- */
