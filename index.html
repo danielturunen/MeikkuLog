@@ -598,6 +598,32 @@ let viewYear, viewMonth;
 (function(){ const n=new Date(); viewYear=n.getFullYear(); viewMonth=n.getMonth(); })();
 
 /* ---------- Lista ---------- */
+function renderShiftCard(s, list){
+  const t=typeByCode(s.code);
+  const d=new Date(s.date+'T12:00');
+  const dayLbl=DAYS[d.getDay()]+' '+d.getDate()+'.'+(d.getMonth()+1)+'.'+d.getFullYear();
+  const codeShown=(s.weCode && isWeekend(s.date) && t.we)? t.we.code : s.code;
+  const totMin=s.segments.reduce((a,seg)=>a+dur(seg.start,seg.end),0);
+  const card=document.createElement('div'); card.className='shift';
+  card.innerHTML=`
+    <div class="badge" style="background:${t.color}"><span class="code">${codeShown}</span></div>
+    <div class="body">
+      <div class="name">${t.name}</div>
+      <div class="time">${s.start}–${s.end} · ${fmtH(totMin)}</div>
+      <div class="segs">${s.segments.map(seg=>`
+        <div class="seg"><span class="dot" style="background:${roleColor(seg)}"></span>
+          <span class="st">${seg.start}–${seg.end}</span>
+          <span class="rc">${esc(roleCode(seg))}</span></div>`).join('')}</div>
+      ${shiftTraumaBadge(s.id)}
+      ${shiftProcBadge(s.id)}
+    </div>`;
+  if(shiftIsPast(s)) card.classList.add('past');
+  card.onclick=()=>openShift(s.id);
+  const wrap=document.createElement('div'); wrap.className='day';
+  wrap.innerHTML=`<div class="daylabel" style="margin-top:0">${dayLbl}</div>`;
+  wrap.appendChild(card); list.appendChild(wrap);
+}
+
 function render(){
   document.getElementById('monthLabel').textContent = MONTHS[viewMonth]+' '+viewYear;
   const inMonth = shifts.filter(s=>{ const d=new Date(s.date+'T12:00'); return d.getFullYear()===viewYear && d.getMonth()===viewMonth; })
@@ -609,32 +635,15 @@ function render(){
   const list=document.getElementById('list');
   if(!inMonth.length){ list.innerHTML='<div class="empty"><div class="big">📋</div>Ei vuoroja tässä kuussa.<br>Lisää + napista tai tuo vuorot ⤒ napista.</div>'; return; }
   list.innerHTML='';
-  inMonth.forEach(s=>{
-    const t=typeByCode(s.code);
-    const d=new Date(s.date+'T12:00');
-    const dayLbl=DAYS[d.getDay()]+' '+d.getDate()+'.'+(d.getMonth()+1)+'.';
-    const codeShown=(s.weCode && isWeekend(s.date) && t.we)? t.we.code : s.code;
-    const totMin=s.segments.reduce((a,seg)=>a+dur(seg.start,seg.end),0);
-    const card=document.createElement('div'); card.className='shift';
-    card.innerHTML=`
-      <div class="badge" style="background:${t.color}"><span class="code">${codeShown}</span></div>
-      <div class="body">
-        <div class="name">${t.name}</div>
-        <div class="time">${s.start}–${s.end} · ${fmtH(totMin)}</div>
-        <div class="segs">${s.segments.map(seg=>`
-          <div class="seg"><span class="dot" style="background:${roleColor(seg)}"></span>
-            <span class="st">${seg.start}–${seg.end}</span>
-            <span class="rc">${esc(roleCode(seg))}</span></div>`).join('')}</div>
-        ${shiftTraumaBadge(s.id)}
-        ${shiftProcBadge(s.id)}
-      </div>`;
-    const past=shiftIsPast(s);
-    if(past) card.classList.add('past');
-    card.onclick=()=>openShift(s.id);
-    const wrap=document.createElement('div'); wrap.className='day';
-    wrap.innerHTML=`<div class="daylabel" style="margin-top:0">${dayLbl}</div>`;
-    wrap.appendChild(card); list.appendChild(wrap);
-  });
+  const upcoming=inMonth.filter(s=>!shiftIsPast(s));
+  const past=inMonth.filter(s=>shiftIsPast(s));
+  upcoming.forEach(s=>renderShiftCard(s, list));
+  if(past.length){
+    const sep=document.createElement('div'); sep.className='daylabel'; sep.style.cssText='margin:18px 4px 8px; text-align:center; font-size:11px; letter-spacing:1px;';
+    sep.textContent='— MENNEET VUOROT —';
+    list.appendChild(sep);
+    past.forEach(s=>renderShiftCard(s, list));
+  }
 }
 
 function shiftRealEnd(s){
