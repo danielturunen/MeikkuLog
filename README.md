@@ -21,13 +21,15 @@ Mobiilikäyttöön suunniteltu työvuorojen ja päivystyksen kliinisten tapahtum
 ### Hätätilapotilaat
 - Kirjaus vuoron aikana tai erillisestä päiväkirjasta: **Traumahälytys, Raptor vakaa, Raptor instabiili, Elvytys, Muu hätätila**.
 - Traumahälytyksille: tylppä/terävä, ikä, vammamekanismi, vammat/löydökset, rooli (Traumahoitaja / Ane1 / Ane2 / AMBreboa), jäikö henkiin sekä jatkohoito (päivystys, leikkaussali, teho-/vuodeosasto, kraniotomia, laparotomia ym.).
-- Tilastot: tyypeittäin, kuukausittain, tylppä vs. terävä, eloonjäänti-%, jatkohoitojakauma sekä **traumahälytykset vs. traumatiimivuorot** ja tiimivuorot rooleittain.
+- Tilastot **jaksonvalinnalla** (kuukausittain ↔ koko historia): tyypeittäin, viikonpäivittäin, kuukausisyklit, tylppä vs. terävä, eloonjäänti-%, jatkohoitojakauma sekä **traumahälytykset vs. traumatiimivuorot** ja tiimivuorot rooleittain.
+- **Traumatiimi & altistus** -mittarit: tiimivuorot ja -tunnit, osuus työajasta traumatiimissä, traumahälytyksiä per tiimivuoro, hälytyksiä per 100 h sekä osuus tiimivuoroista joissa vähintään yksi hälytys.
 
 ### Toimenpiteet & hälytykset
 - Huonekohtainen kirjaus: intubaatio, STROKE, elvytys, STEMI, massiivivuoto, sepsis, kardioversio, CVK, arteriakanyyli, IO ja muu.
 - **STROKE-hälytyksille** hoitopäätös/löydös: liuotushoito, trombektomia (EVT), ei liuotushoitoa/trombektomiaa, seuranta, vuoto, ei löydöksiä, vanha infarkti.
 - **UÄ-perifeerinen suonikanylointi** omalla lopputuloksella (tarvitsi UÄ / onnistui ilman UÄ / ei onnistunut) ja onnistumis-%:lla — myös huoneittain.
 - Paikat: H1, H2, H3, H4, H5, H6, H19, Raptor-sali, T-Aula, S-Aula, RTG, Muu.
+- Tilastot jaksonvalinnalla: tyypeittäin, kuukausittain, viikonpäivittäin, huoneittain, toimenpiteitä per työvuoro sekä UÄ-kanylointien onnistumis-% ja STROKE-hoitopäätökset.
 
 ---
 
