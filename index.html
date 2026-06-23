@@ -177,6 +177,45 @@
   .logmonth{font-size:12px; color:var(--muted); text-transform:capitalize; font-weight:700; margin:16px 4px 8px;}
   .traumahint{background:rgba(248,113,113,.10); border:1px solid rgba(248,113,113,.28); color:var(--text);
     border-radius:12px; padding:10px 12px; font-size:12px; line-height:1.5; margin-bottom:10px;}
+
+  /* Aktiivisuus-heatmap */
+  .heatwrap{overflow-x:auto; -webkit-overflow-scrolling:touch; background:var(--card); border:1px solid var(--line); border-radius:12px; padding:10px;}
+  .heat{display:grid; grid-auto-flow:column; grid-template-rows:repeat(7,1fr); gap:3px; width:max-content;}
+  .heat .hc{width:13px; height:13px; border-radius:3px; background:var(--card2);}
+  .heatleg{display:flex; align-items:center; gap:5px; font-size:10px; color:var(--muted); margin-top:8px; justify-content:flex-end;}
+  .heatleg .hc{width:11px; height:11px; border-radius:3px; display:inline-block;}
+
+  /* Haku */
+  .searchbar{position:relative; margin-bottom:10px;}
+  .searchbar input{padding-left:36px;}
+  .searchbar .si{position:absolute; left:12px; top:50%; transform:translateY(-50%); color:var(--muted); font-size:15px; pointer-events:none;}
+
+  /* Kuvat */
+  .imgrow{display:flex; flex-wrap:wrap; gap:8px; margin-top:8px;}
+  .imgthumb{position:relative; width:72px; height:72px; border-radius:10px; overflow:hidden; border:1px solid var(--line);}
+  .imgthumb img{width:100%; height:100%; object-fit:cover; display:block;}
+  .imgthumb .x{position:absolute; top:2px; right:2px; width:22px; height:22px; border-radius:50%; background:rgba(0,0,0,.65); color:#fff; border:none; font-size:14px; line-height:1; padding:0; display:grid; place-items:center;}
+  .addimg{background:var(--card2); border:1px dashed var(--line); color:var(--accent); border-radius:10px; width:72px; height:72px; font-size:26px; display:grid; place-items:center;}
+  .addimg:active{transform:scale(.95);}
+  .rowimg{display:flex; gap:6px; margin-top:6px; flex-wrap:wrap;}
+  .rowimg img{width:52px; height:52px; object-fit:cover; border-radius:8px; border:1px solid var(--line);}
+
+  /* Pikakirjaus */
+  .qfab{position:fixed; right:max(18px,env(safe-area-inset-right)); bottom:calc(max(22px,env(safe-area-inset-bottom)) + 74px);
+    width:52px; height:52px; border-radius:50%; background:var(--card); color:var(--text); border:1px solid var(--line);
+    font-size:23px; box-shadow:0 6px 18px rgba(0,0,0,.45); display:grid; place-items:center; z-index:20;}
+  .qfab:active{transform:scale(.92);}
+  .qmenu{position:fixed; right:max(18px,env(safe-area-inset-right)); bottom:calc(max(22px,env(safe-area-inset-bottom)) + 134px);
+    display:none; flex-direction:column; gap:8px; z-index:21;}
+  .qmenu.open{display:flex; animation:up .18s ease;}
+  .qmenu button{background:var(--card2); border:1px solid var(--line); color:var(--text); border-radius:12px;
+    padding:12px 16px; font-weight:700; font-size:14px; box-shadow:0 6px 18px rgba(0,0,0,.45); white-space:nowrap; text-align:right;}
+  .qmenu button:active{transform:scale(.96);}
+
+  /* Kuvan suurennos */
+  .lightbox{position:fixed; inset:0; background:rgba(0,0,0,.93); z-index:60; display:none; align-items:center; justify-content:center; padding:18px;}
+  .lightbox.open{display:flex;}
+  .lightbox img{max-width:100%; max-height:100%; border-radius:10px;}
 </style>
 </head>
 <body>
@@ -205,7 +244,15 @@
   <div id="list"></div>
 </div>
 
+<div class="qmenu" id="qMenu">
+  <button id="qPatient">🩸 Lisää potilas</button>
+  <button id="qProc">💉 Lisää toimenpide</button>
+</div>
+<button class="qfab" id="quickBtn" title="Pikakirjaus">⚡</button>
 <button class="fab" id="addBtn">+</button>
+
+<!-- Kuvan suurennos -->
+<div class="lightbox" id="lightbox"><img alt="kuva"></div>
 
 <!-- Vuoron muokkaus -->
 <div class="sheet" id="shiftSheet">
@@ -286,7 +333,8 @@
       <button class="scope" id="tabProcs">Toimenpiteet</button>
     </div>
     <div class="scopebar" style="margin-bottom:10px;">
-      <button class="scope" id="logScopeMonth">Kuukausittain</button>
+      <button class="scope" id="logScopeMonth">Kuukausi</button>
+      <button class="scope" id="logScopeYear">Vuosi</button>
       <button class="scope on" id="logScopeAll">Kaikki</button>
     </div>
     <div class="monthbar" id="logMonthNav" style="margin-bottom:12px; display:none;">
@@ -294,6 +342,7 @@
       <div class="m" id="logPeriodLabel"></div>
       <button class="nav" id="logNextM">›</button>
     </div>
+    <div class="searchbar"><span class="si">🔍</span><input type="text" id="logSearch" placeholder="Hae kirjauksista…"></div>
     <div id="logStats"></div>
     <button class="btn primary" id="addLogItem">+ Lisää potilas</button>
     <div id="logList"></div>
@@ -330,6 +379,10 @@
     <label class="fl">Lisätiedot (valinnainen)</label>
     <textarea id="tNotes" style="min-height:80px;"></textarea>
 
+    <label class="fl">Kuvat (valinnainen)</label>
+    <div class="imgrow" id="tImgs"></div>
+    <input type="file" id="tImgInput" accept="image/*" multiple style="display:none;">
+
     <button class="btn primary" id="saveTrauma">Tallenna</button>
     <button class="btn danger" id="deleteTrauma" style="display:none;">Poista</button>
     <button class="btn ghost" id="cancelTrauma">Peruuta</button>
@@ -360,6 +413,10 @@
 
     <label class="fl">Lisätiedot (valinnainen)</label>
     <textarea id="pNotes" style="min-height:80px;" placeholder="esim. potilas, indikaatio, kuka intuboi"></textarea>
+
+    <label class="fl">Kuvat (valinnainen)</label>
+    <div class="imgrow" id="pImgs"></div>
+    <input type="file" id="pImgInput" accept="image/*" multiple style="display:none;">
 
     <button class="btn primary" id="saveProc">Tallenna</button>
     <button class="btn danger" id="deleteProc" style="display:none;">Poista</button>
@@ -469,15 +526,19 @@ function parseRole(str){
 }
 
 /* ---------- Tallennus ---------- */
+function lsSet(k,v){
+  try{ localStorage.setItem(k, v); return true; }
+  catch(e){ alert('Tallennustila on täynnä. Poista kuvia tai vanhoja kirjauksia ja yritä uudelleen.'); return false; }
+}
 const LS_SHIFTS='tv_shifts2';
 let shifts = JSON.parse(localStorage.getItem(LS_SHIFTS)||'[]');
-function saveShifts(){ localStorage.setItem(LS_SHIFTS, JSON.stringify(shifts)); }
+function saveShifts(){ lsSet(LS_SHIFTS, JSON.stringify(shifts)); }
 function rid(){ return Math.random().toString(36).slice(2,9); }
 
 /* ---------- Traumapotilaat ---------- */
 const LS_TRAUMAS='tv_traumas';
 let traumas = JSON.parse(localStorage.getItem(LS_TRAUMAS)||'[]');
-function saveTraumas(){ localStorage.setItem(LS_TRAUMAS, JSON.stringify(traumas)); }
+function saveTraumas(){ lsSet(LS_TRAUMAS, JSON.stringify(traumas)); }
 
 const TRAUMA_TYPES=[
   {id:'traumahalytys',     label:'Traumahälytys',     short:'Trauma',    color:'#fca5a5', group:'Trauma'},
@@ -524,7 +585,7 @@ function canonRole(s){
 /* ---------- Toimenpiteet & hälytykset ---------- */
 const LS_PROCS='tv_procs';
 let procs = JSON.parse(localStorage.getItem(LS_PROCS)||'[]');
-function saveProcs(){ localStorage.setItem(LS_PROCS, JSON.stringify(procs)); }
+function saveProcs(){ lsSet(LS_PROCS, JSON.stringify(procs)); }
 
 /* Meilahden päivystyksessä mahdollisia tilanteita — voi tapahtua missä huoneessa tahansa */
 const PROC_TYPES=[
@@ -1069,6 +1130,7 @@ function traumaRowHTML(t){
     </div>`:''}
     ${t.role?`<div class="tnote">Rooli: ${esc(t.role)}</div>`:''}
     ${t.notes?`<div class="tnote">${esc(t.notes)}</div>`:''}
+    ${(t.imgs&&t.imgs.length)?`<div class="rowimg">${t.imgs.map(s=>`<img src="${s}">`).join('')}</div>`:''}
   </div>`;
 }
 
@@ -1081,6 +1143,7 @@ function buildTraumaSection(){
   h+=list.map(traumaRowHTML).join('');
   c.innerHTML=h;
   c.querySelectorAll('.trow').forEach(el=>el.onclick=()=>openTrauma(el.dataset.tid,'shift'));
+  wireRowImgs(c);
 }
 
 /* Editori */
@@ -1138,6 +1201,18 @@ function buildTraumaRoleChips(){
   c.querySelectorAll('.chip').forEach(el=>el.onclick=()=>{
     traumaDraft.role = (traumaDraft.role===el.dataset.role ? '' : el.dataset.role); buildTraumaRoleChips(); });
 }
+function buildTraumaImgs(){
+  const c=document.getElementById('tImgs'); if(!c||!traumaDraft) return;
+  const imgs=traumaDraft.imgs||(traumaDraft.imgs=[]);
+  c.innerHTML=imgs.map((s,i)=>`<div class="imgthumb"><img src="${s}"><button class="x" data-i="${i}">×</button></div>`).join('')
+    + `<button class="addimg" id="tAddImg" type="button">+</button>`;
+  c.querySelectorAll('.x').forEach(b=>b.onclick=()=>{ imgs.splice(+b.dataset.i,1); buildTraumaImgs(); });
+  c.querySelectorAll('.imgthumb img').forEach(im=>im.onclick=()=>openLightbox(im.src));
+  document.getElementById('tAddImg').onclick=()=>document.getElementById('tImgInput').click();
+}
+document.getElementById('tImgInput').onchange=async e=>{
+  await handleImgFiles(e.target.files, traumaDraft.imgs||(traumaDraft.imgs=[]), buildTraumaImgs); e.target.value='';
+};
 function fillTraumaForm(){
   document.getElementById('tDate').value=traumaDraft.date;
   document.getElementById('tAge').value=traumaDraft.age||'';
@@ -1145,7 +1220,7 @@ function fillTraumaForm(){
   document.getElementById('tInj').value=traumaDraft.injuries||'';
   document.getElementById('tNotes').value=traumaDraft.notes||'';
   traumaDraft.role=canonRole(traumaDraft.role);
-  buildTraumaTypeGrid(); buildTraumaRoleChips(); buildTraumaExtra();
+  buildTraumaTypeGrid(); buildTraumaRoleChips(); buildTraumaExtra(); buildTraumaImgs();
 }
 function openTrauma(id, returnTo){
   editingTraumaId=id; traumaReturnTo=returnTo;
@@ -1157,7 +1232,7 @@ function openTrauma(id, returnTo){
 function openNewTrauma(pre, returnTo){
   editingTraumaId=null; traumaReturnTo=returnTo;
   traumaDraft=Object.assign({id:null, shiftId:null, date:ymd(new Date()), type:'traumahalytys',
-    age:'', mechanism:'', injuries:'', role:'', notes:'', traumaKind:'', survived:'', disposition:[], dispositionDetail:{}, raptorVenue:''}, pre||{});
+    age:'', mechanism:'', injuries:'', role:'', notes:'', traumaKind:'', survived:'', disposition:[], dispositionDetail:{}, raptorVenue:'', imgs:[]}, pre||{});
   document.getElementById('traumaTitle').textContent='Uusi potilas';
   document.getElementById('deleteTrauma').style.display='none';
   fillTraumaForm(); document.getElementById('traumaSheet').classList.add('open');
@@ -1194,9 +1269,14 @@ document.getElementById('addTraumaBtn').onclick=()=>{
 };
 
 /* ---------- Jakson valinta & tilastoapurit ---------- */
-let logScope='all', logYear, logMonth;
+let logScope='all', logYear, logMonth, logSearch='';
 (function(){ const n=new Date(); logYear=n.getFullYear(); logMonth=n.getMonth(); })();
-function inLogPeriod(dateStr){ if(logScope==='all') return true; const d=new Date(dateStr+'T12:00'); return d.getFullYear()===logYear && d.getMonth()===logMonth; }
+function inLogPeriod(dateStr){
+  if(logScope==='all') return true;
+  const d=new Date(dateStr+'T12:00');
+  if(logScope==='year') return d.getFullYear()===logYear;
+  return d.getFullYear()===logYear && d.getMonth()===logMonth;
+}
 function segIsTraumaRole(seg){ return seg.loc==='AMBreboa' || TRAUMA_ROLE_SUFFIXES.includes(seg.suffix); }
 function traumaTeamMinutes(s){ return (s.segments||[]).filter(segIsTraumaRole).reduce((a,seg)=>a+dur(seg.start,seg.end),0); }
 function shiftMinutes(s){ return (s.segments||[]).reduce((a,seg)=>a+dur(seg.start,seg.end),0); }
@@ -1215,13 +1295,155 @@ function monthlyChart(items,color){
 }
 const dec1=x=>(Math.round(x*10)/10).toString().replace('.',',');
 const dec2=x=>(Math.round(x*100)/100).toString().replace('.',',');
+function tileHTML(v,k){ return '<div class="tile"><div class="v">'+v+'</div><div class="k">'+k+'</div></div>'; }
+
+/* Virstanpylväät & motivaatio */
+const MILESTONES=[10,25,50,100,200,300,500,750,1000,1500,2000];
+function nextMilestone(n){ return MILESTONES.find(m=>m>n)||null; }
+function monthStreak(items){
+  if(!items.length) return 0;
+  const set={}; items.forEach(it=>set[it.date.slice(0,7)]=1);
+  const key=(y,m)=>y+'-'+pad2(m+1);
+  const n=new Date(); let y=n.getFullYear(), m=n.getMonth();
+  if(!set[key(y,m)]){ m--; if(m<0){m=11;y--;} } /* kuluva kuukausi saa olla tyhjä katkaisematta putkea */
+  let s=0; while(set[key(y,m)]){ s++; m--; if(m<0){m=11;y--;} }
+  return s;
+}
+function motivaatioHTML(items, color){
+  if(!items.length) return '';
+  const total=items.length;
+  const nm=nextMilestone(total);
+  const monthsSet={}; items.forEach(it=>monthsSet[it.date.slice(0,7)]=1);
+  const activeMonths=Object.keys(monthsSet).length;
+  const byM={}; items.forEach(it=>{ const k=it.date.slice(0,7); byM[k]=(byM[k]||0)+1; });
+  const best=Math.max.apply(null, Object.keys(byM).map(k=>byM[k]).concat([0]));
+  const streak=monthStreak(items);
+  let h='<div class="s-section">Motivaatio</div><div class="tilegrid">'
+    + tileHTML(total,'Yhteensä')
+    + tileHTML(streak,'Kk-putki')
+    + tileHTML(activeMonths,'Aktiivisia kk')
+    + '</div>';
+  if(nm){ const pc=Math.round(total/nm*100);
+    h+=`<div class="brow" style="margin-top:8px;"><div class="l1"><span class="nm">Seuraava virstanpylväs</span>
+      <span class="mt"><b>${total}</b> / ${nm}</span></div>
+      <div class="bar"><i style="width:${Math.max(3,pc)}%;background:${color}"></i></div></div>`;
+  } else {
+    h+=`<div class="hint" style="margin-top:8px;">Kaikki virstanpylväät ohitettu — hienoa! Paras kuukausi: <b>${best}</b> kirjausta.</div>`;
+  }
+  return h;
+}
+
+/* Aktiivisuus-heatmap (n. 6 kk) */
+function activityHeatmap(items, color){
+  const cnt={}; items.forEach(it=>{ cnt[it.date]=(cnt[it.date]||0)+1; });
+  const today=new Date(); today.setHours(12,0,0,0);
+  const start=new Date(today); start.setDate(start.getDate()-181);
+  start.setDate(start.getDate()-((start.getDay()+6)%7)); /* tasaa maanantaihin */
+  let maxc=1; Object.keys(cnt).forEach(k=>{ if(cnt[k]>maxc) maxc=cnt[k]; });
+  let cells=''; const cur=new Date(start);
+  while(cur<=today){
+    const k=ymd(cur), nn=cnt[k]||0;
+    const op = nn? (0.3 + 0.7*Math.min(1, nn/maxc)) : 0;
+    cells+=`<div class="hc" title="${k}: ${nn}" style="${nn?`background:${color};opacity:${op.toFixed(2)}`:''}"></div>`;
+    cur.setDate(cur.getDate()+1);
+  }
+  return '<div class="heatwrap"><div class="heat">'+cells+'</div></div>'
+    + `<div class="heatleg">vähemmän <span class="hc" style="background:${color};opacity:.3"></span>`
+    + `<span class="hc" style="background:${color};opacity:.55"></span>`
+    + `<span class="hc" style="background:${color};opacity:.8"></span>`
+    + `<span class="hc" style="background:${color}"></span> enemmän</div>`;
+}
+
+/* Vuosikatsaus & 12 kk -kaavio */
+function yearMonthlyChart(items, year, color){
+  const c=new Array(12).fill(0);
+  items.forEach(it=>{ if(+it.date.slice(0,4)===year) c[+it.date.slice(5,7)-1]++; });
+  const mx=Math.max.apply(null, c.concat([1]));
+  return '<div class="vchart" style="margin-top:8px;">'+c.map((n,i)=>`<div class="vcol"><span class="dv">${n||''}</span><span class="db" style="height:${Math.round(n/mx*72)}px;background:${color}"></span><span class="dl">${i+1}</span></div>`).join('')+'</div>';
+}
+function yearReportHTML(items, color){
+  const cur=items.filter(it=>+it.date.slice(0,4)===logYear).length;
+  const prev=items.filter(it=>+it.date.slice(0,4)===logYear-1).length;
+  let dstr;
+  if(prev===0) dstr = cur? 'uusi' : '–';
+  else { const d=Math.round((cur-prev)/prev*100); dstr=(d>0?'+':'')+d+' %'; }
+  let h='<div class="s-section">Vuosikatsaus '+logYear+'</div><div class="tilegrid">'
+    + tileHTML(cur, String(logYear)) + tileHTML(prev, String(logYear-1)) + tileHTML(dstr, 'Muutos') + '</div>';
+  h+=yearMonthlyChart(items, logYear, color);
+  return h;
+}
+
+/* Pikakirjaus: meneillään oleva vuoro */
+function currentShift(){
+  const now=new Date();
+  return shifts.find(s=>{
+    const st=new Date(s.date+'T'+(s.start||(s.segments[0]&&s.segments[0].start)||'00:00'));
+    return st<=now && now<=shiftRealEnd(s);
+  });
+}
+
+/* Kuvat: pakkaus & käsittely */
+function compressImage(file, maxDim, quality){
+  return new Promise((resolve,reject)=>{
+    const fr=new FileReader();
+    fr.onload=()=>{ const img=new Image();
+      img.onload=()=>{ let w=img.width, h=img.height;
+        if(w>=h && w>maxDim){ h=Math.round(h*maxDim/w); w=maxDim; }
+        else if(h>w && h>maxDim){ w=Math.round(w*maxDim/h); h=maxDim; }
+        const cv=document.createElement('canvas'); cv.width=w; cv.height=h;
+        cv.getContext('2d').drawImage(img,0,0,w,h);
+        resolve(cv.toDataURL('image/jpeg', quality)); };
+      img.onerror=reject; img.src=fr.result; };
+    fr.onerror=reject; fr.readAsDataURL(file);
+  });
+}
+async function handleImgFiles(files, arr, rebuild){
+  for(const f of Array.from(files)){
+    if(!f.type || !f.type.startsWith('image/')) continue;
+    try{ arr.push(await compressImage(f, 1024, 0.6)); }catch(e){}
+  }
+  rebuild();
+}
+function openLightbox(src){ const lb=document.getElementById('lightbox'); lb.querySelector('img').src=src; lb.classList.add('open'); }
+function wireRowImgs(container){
+  container.querySelectorAll('.rowimg img').forEach(im=>im.onclick=e=>{ e.stopPropagation(); openLightbox(im.src); });
+}
+
+/* Haku */
+function traumaMatch(t,q){
+  const tt=traumaTypeById(t.type);
+  return [tt.label, t.age, t.mechanism, t.injuries, t.notes, t.role, t.traumaKind, t.survived, t.raptorVenue,
+    (t.disposition||[]).join(' '), Object.keys(t.dispositionDetail||{}).map(k=>t.dispositionDetail[k]).join(' '), t.date]
+    .join(' ').toLowerCase().includes(q);
+}
+function procMatch(p,q){
+  const pt=procTypeById(p.type); const oc=p.outcome?outcomeById(p.outcome):null;
+  return [pt.label, p.room?procRoomById(p.room).label:'', p.notes, (p.strokeDecision||[]).join(' '), oc?oc.label:'', p.date]
+    .join(' ').toLowerCase().includes(q);
+}
 
 /* Päiväkirja — potilaat */
+function fillTraumaList(arr){
+  let h='', curM='';
+  arr.forEach(t=>{ const d=new Date(t.date+'T12:00'); const mk=MONTHS[d.getMonth()]+' '+d.getFullYear();
+    if(mk!==curM){ curM=mk; h+=`<div class="logmonth">${mk}</div>`; }
+    h+=traumaRowHTML(t); });
+  const list=document.getElementById('logList'); list.innerHTML=h;
+  list.querySelectorAll('.trow').forEach(el=>el.onclick=()=>openTrauma(el.dataset.tid,'log'));
+  wireRowImgs(list);
+}
 function renderPatientLog(){
   const stats=document.getElementById('logStats'), list=document.getElementById('logList');
   if(!traumas.length){
     stats.innerHTML='';
     list.innerHTML='<div class="empty"><div class="big">🩺</div>Ei kirjattuja potilaita.<br>Lisää + napista tai vuoron muokkauksesta.</div>';
+    return;
+  }
+  const q=(logSearch||'').trim().toLowerCase();
+  if(q){
+    const matches=traumas.filter(t=>traumaMatch(t,q)).slice().sort((a,b)=> a.date<b.date?1 : a.date>b.date?-1 : (b.created||0)-(a.created||0));
+    stats.innerHTML=`<div class="hint" style="margin-top:0;">Haku koko historiasta: <b>${matches.length}</b> osumaa “${esc(logSearch.trim())}”.</div>`;
+    if(matches.length) fillTraumaList(matches); else list.innerHTML='<div class="empty">Ei osumia.</div>';
     return;
   }
   const all=traumas.filter(t=>inLogPeriod(t.date)).slice().sort((a,b)=> a.date<b.date?1 : a.date>b.date?-1 : (b.created||0)-(a.created||0));
@@ -1244,6 +1466,10 @@ function renderPatientLog(){
     + tile((counts['raptor_vakaa']||0)+(counts['raptor_instabiili']||0),'Raptor')
     + tile(grp('Muu hätä'),'Muu hätä')
     + '</div>';
+
+  if(logScope==='year') st+=yearReportHTML(traumas,'#f87171');
+  st+=motivaatioHTML(traumas,'#f87171');
+  st+='<div class="s-section">Aktiivisuus (6 kk)</div>'+activityHeatmap(traumas,'#f87171');
 
   /* traumatiimi & altistus (valitulla jaksolla) */
   const scopedShifts=shifts.filter(s=>inLogPeriod(s.date));
@@ -1359,15 +1585,7 @@ function renderPatientLog(){
 
   st+='<div class="s-section">Kirjaukset</div>';
   stats.innerHTML=st;
-
-  let h='', curM='';
-  all.forEach(t=>{
-    const d=new Date(t.date+'T12:00'); const mk=MONTHS[d.getMonth()]+' '+d.getFullYear();
-    if(mk!==curM){ curM=mk; h+=`<div class="logmonth">${mk}</div>`; }
-    h+=traumaRowHTML(t);
-  });
-  list.innerHTML=h;
-  list.querySelectorAll('.trow').forEach(el=>el.onclick=()=>openTrauma(el.dataset.tid,'log'));
+  fillTraumaList(all);
 }
 /* ---------- Toimenpiteet & hälytykset: kirjaus & tilastot ---------- */
 let editingProcId=null, procDraft=null, procReturnTo=null;
@@ -1392,6 +1610,7 @@ function procRowHTML(p){
     ${(p.strokeDecision&&p.strokeDecision.length)?`<div style="margin:3px 0 4px; display:flex; flex-wrap:wrap; gap:4px;">
       ${p.strokeDecision.map(x=>`<span class="ptag">${esc(x)}</span>`).join('')}</div>`:''}
     ${p.notes?`<div class="tinj">${esc(p.notes)}</div>`:''}
+    ${(p.imgs&&p.imgs.length)?`<div class="rowimg">${p.imgs.map(s=>`<img src="${s}">`).join('')}</div>`:''}
   </div>`;
 }
 function buildProcSection(){
@@ -1399,6 +1618,7 @@ function buildProcSection(){
   const list=procs.filter(p=>p.shiftId===draft.id).sort((a,b)=>(a.created||0)-(b.created||0));
   c.innerHTML=list.map(procRowHTML).join('');
   c.querySelectorAll('.trow').forEach(el=>el.onclick=()=>openProc(el.dataset.pid,'shift'));
+  wireRowImgs(c);
 }
 
 /* Editori */
@@ -1443,10 +1663,22 @@ function buildProcRoomChips(){
       style="${procDraft.room===l.id?`background:${l.color}`:''}">${esc(l.label)}</button>`).join('');
   c.querySelectorAll('.chip').forEach(el=>el.onclick=()=>{ procDraft.room=el.dataset.room; buildProcRoomChips(); });
 }
+function buildProcImgs(){
+  const c=document.getElementById('pImgs'); if(!c||!procDraft) return;
+  const imgs=procDraft.imgs||(procDraft.imgs=[]);
+  c.innerHTML=imgs.map((s,i)=>`<div class="imgthumb"><img src="${s}"><button class="x" data-i="${i}">×</button></div>`).join('')
+    + `<button class="addimg" id="pAddImg" type="button">+</button>`;
+  c.querySelectorAll('.x').forEach(b=>b.onclick=()=>{ imgs.splice(+b.dataset.i,1); buildProcImgs(); });
+  c.querySelectorAll('.imgthumb img').forEach(im=>im.onclick=()=>openLightbox(im.src));
+  document.getElementById('pAddImg').onclick=()=>document.getElementById('pImgInput').click();
+}
+document.getElementById('pImgInput').onchange=async e=>{
+  await handleImgFiles(e.target.files, procDraft.imgs||(procDraft.imgs=[]), buildProcImgs); e.target.value='';
+};
 function fillProcForm(){
   document.getElementById('pDate').value=procDraft.date;
   document.getElementById('pNotes').value=procDraft.notes||'';
-  buildProcTypeGrid(); buildProcOutcome(); buildProcStroke(); buildProcRoomChips();
+  buildProcTypeGrid(); buildProcOutcome(); buildProcStroke(); buildProcRoomChips(); buildProcImgs();
 }
 function openProc(id, returnTo){
   editingProcId=id; procReturnTo=returnTo;
@@ -1457,7 +1689,7 @@ function openProc(id, returnTo){
 }
 function openNewProc(pre, returnTo){
   editingProcId=null; procReturnTo=returnTo;
-  procDraft=Object.assign({id:null, shiftId:null, date:ymd(new Date()), type:'intubaatio', room:'H2', outcome:'', strokeDecision:[], notes:''}, pre||{});
+  procDraft=Object.assign({id:null, shiftId:null, date:ymd(new Date()), type:'intubaatio', room:'H2', outcome:'', strokeDecision:[], notes:'', imgs:[]}, pre||{});
   document.getElementById('procTitle').textContent='Uusi toimenpide';
   document.getElementById('deleteProc').style.display='none';
   fillProcForm(); document.getElementById('procSheet').classList.add('open');
@@ -1488,11 +1720,27 @@ document.getElementById('addProcBtn').onclick=()=>{
 };
 
 /* Päiväkirja — toimenpiteet */
+function fillProcList(arr){
+  let h='', curM='';
+  arr.forEach(p=>{ const d=new Date(p.date+'T12:00'); const mk=MONTHS[d.getMonth()]+' '+d.getFullYear();
+    if(mk!==curM){ curM=mk; h+=`<div class="logmonth">${mk}</div>`; }
+    h+=procRowHTML(p); });
+  const list=document.getElementById('logList'); list.innerHTML=h;
+  list.querySelectorAll('.trow').forEach(el=>el.onclick=()=>openProc(el.dataset.pid,'log'));
+  wireRowImgs(list);
+}
 function renderProcLog(){
   const stats=document.getElementById('logStats'), list=document.getElementById('logList');
   if(!procs.length){
     stats.innerHTML='';
     list.innerHTML='<div class="empty"><div class="big">💉</div>Ei kirjattuja toimenpiteitä.<br>Lisää + napista tai vuoron muokkauksesta.</div>';
+    return;
+  }
+  const q=(logSearch||'').trim().toLowerCase();
+  if(q){
+    const matches=procs.filter(p=>procMatch(p,q)).slice().sort((a,b)=> a.date<b.date?1 : a.date>b.date?-1 : (b.created||0)-(a.created||0));
+    stats.innerHTML=`<div class="hint" style="margin-top:0;">Haku koko historiasta: <b>${matches.length}</b> osumaa “${esc(logSearch.trim())}”.</div>`;
+    if(matches.length) fillProcList(matches); else list.innerHTML='<div class="empty">Ei osumia.</div>';
     return;
   }
   const all=procs.filter(p=>inLogPeriod(p.date)).slice().sort((a,b)=> a.date<b.date?1 : a.date>b.date?-1 : (b.created||0)-(a.created||0));
@@ -1513,6 +1761,10 @@ function renderProcLog(){
     + tile(counts['stroke']||0,'STROKE')
     + tile(cans.length,'UÄ-kanyyli')
     + '</div>';
+
+  if(logScope==='year') st+=yearReportHTML(procs,'#67e8f9');
+  st+=motivaatioHTML(procs,'#67e8f9');
+  st+='<div class="s-section">Aktiivisuus (6 kk)</div>'+activityHeatmap(procs,'#67e8f9');
 
   /* altistus: toimenpiteet per vuoro */
   const scopedShifts=shifts.filter(s=>inLogPeriod(s.date));
@@ -1596,44 +1848,57 @@ function renderProcLog(){
 
   st+='<div class="s-section">Kirjaukset</div>';
   stats.innerHTML=st;
-
-  let h='', curM='';
-  all.forEach(p=>{ const d=new Date(p.date+'T12:00'); const mk=MONTHS[d.getMonth()]+' '+d.getFullYear();
-    if(mk!==curM){ curM=mk; h+=`<div class="logmonth">${mk}</div>`; }
-    h+=procRowHTML(p); });
-  list.innerHTML=h;
-  list.querySelectorAll('.trow').forEach(el=>el.onclick=()=>openProc(el.dataset.pid,'log'));
+  fillProcList(all);
 }
 
 /* Loki: välilehdet potilaat / toimenpiteet */
 let logTab='patients';
 function renderLog(){
-  if(document.getElementById('logPeriodLabel')) document.getElementById('logPeriodLabel').textContent=MONTHS[logMonth]+' '+logYear;
+  setLogPeriodLabel();
   document.getElementById('tabPatients').classList.toggle('on', logTab==='patients');
   document.getElementById('tabProcs').classList.toggle('on', logTab==='procs');
   document.getElementById('logTitle').textContent = logTab==='procs' ? 'Toimenpiteet & hälytykset' : 'Hätätilapotilaat';
   document.getElementById('addLogItem').textContent = logTab==='procs' ? '+ Lisää toimenpide' : '+ Lisää potilas';
   if(logTab==='procs') renderProcLog(); else renderPatientLog();
 }
-document.getElementById('logBtn').onclick=()=>{ renderLog(); document.getElementById('logSheet').classList.add('open'); };
+document.getElementById('logBtn').onclick=()=>{ logSearch=''; document.getElementById('logSearch').value=''; renderLog(); document.getElementById('logSheet').classList.add('open'); };
 document.getElementById('closeLog').onclick=()=>document.getElementById('logSheet').classList.remove('open');
 document.getElementById('tabPatients').onclick=()=>{ logTab='patients'; renderLog(); };
 document.getElementById('tabProcs').onclick=()=>{ logTab='procs'; renderLog(); };
 document.getElementById('addLogItem').onclick=()=>{ if(logTab==='procs') openNewProc({}, 'log'); else openNewTrauma({}, 'log'); };
-function setLogPeriodLabel(){ document.getElementById('logPeriodLabel').textContent=MONTHS[logMonth]+' '+logYear; }
+document.getElementById('logSearch').oninput=e=>{ logSearch=e.target.value; renderLog(); };
+function setLogPeriodLabel(){
+  const el=document.getElementById('logPeriodLabel'); if(!el) return;
+  el.textContent = logScope==='year' ? String(logYear) : (MONTHS[logMonth]+' '+logYear);
+}
 function setLogScope(sc){
   logScope=sc;
   document.getElementById('logScopeMonth').classList.toggle('on',sc==='month');
+  document.getElementById('logScopeYear').classList.toggle('on',sc==='year');
   document.getElementById('logScopeAll').classList.toggle('on',sc==='all');
-  document.getElementById('logMonthNav').style.display = sc==='month'?'flex':'none';
+  document.getElementById('logMonthNav').style.display = (sc==='month'||sc==='year')?'flex':'none';
   setLogPeriodLabel(); renderLog();
 }
 document.getElementById('logScopeMonth').onclick=()=>setLogScope('month');
+document.getElementById('logScopeYear').onclick=()=>setLogScope('year');
 document.getElementById('logScopeAll').onclick=()=>setLogScope('all');
-document.getElementById('logPrevM').onclick=()=>{ if(--logMonth<0){logMonth=11;logYear--;} setLogPeriodLabel(); renderLog(); };
-document.getElementById('logNextM').onclick=()=>{ if(++logMonth>11){logMonth=0;logYear++;} setLogPeriodLabel(); renderLog(); };
+document.getElementById('logPrevM').onclick=()=>{ if(logScope==='year'){ logYear--; } else { if(--logMonth<0){logMonth=11;logYear--;} } setLogPeriodLabel(); renderLog(); };
+document.getElementById('logNextM').onclick=()=>{ if(logScope==='year'){ logYear++; } else { if(++logMonth>11){logMonth=0;logYear++;} } setLogPeriodLabel(); renderLog(); };
 
 document.querySelectorAll('.sheet').forEach(sh=>sh.addEventListener('click',e=>{ if(e.target===sh) sh.classList.remove('open'); }));
+
+/* ---------- Pikakirjaus ---------- */
+const qMenu=document.getElementById('qMenu');
+document.getElementById('quickBtn').onclick=e=>{ e.stopPropagation(); qMenu.classList.toggle('open'); };
+document.addEventListener('click',e=>{ if(qMenu.classList.contains('open') && e.target.id!=='quickBtn') qMenu.classList.remove('open'); });
+document.getElementById('qPatient').onclick=()=>{ qMenu.classList.remove('open'); const cs=currentShift();
+  openNewTrauma(cs?{date:cs.date, shiftId:cs.id, role:traumaRolePrefill(cs)}:{}, 'home'); };
+document.getElementById('qProc').onclick=()=>{ qMenu.classList.remove('open'); const cs=currentShift();
+  const room=(cs&&cs.segments&&cs.segments[0]&&cs.segments[0].loc)||'H2';
+  openNewProc(cs?{date:cs.date, shiftId:cs.id, room}:{}, 'home'); };
+
+/* ---------- Kuvan suurennos ---------- */
+document.getElementById('lightbox').onclick=()=>document.getElementById('lightbox').classList.remove('open');
 
 render();
 </script>
