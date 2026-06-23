@@ -534,11 +534,10 @@ const PROC_TYPES=[
   {id:'stemi',        label:'STEMI / sydänhälytys',    short:'STEMI',    color:'#fdba74'},
   {id:'massiivivuoto',label:'Massiivivuoto',           short:'Massiivi', color:'#fb7185'},
   {id:'sepsis',       label:'Sepsis-hälytys',          short:'Sepsis',   color:'#fcd34d'},
-  {id:'kardioversio', label:'Kardioversio / tahdistus',short:'Kardiov.', color:'#67e8f9'},
+  {id:'kardioversio', label:'Kardioversio',             short:'Kardiov.', color:'#67e8f9'},
+  {id:'tahdistus',    label:'Tahdistus',               short:'Tahdist.', color:'#22d3ee'},
   {id:'ua_kanyyli',   label:'UÄ perifeerinen kanyyli', short:'UÄ-kanyyli',color:'#5eead4', cannula:true},
   {id:'cvk',          label:'Keskuslaskimokatetri',    short:'CVK',      color:'#c4b5fd'},
-  {id:'arteria',      label:'Arteriakanyyli',          short:'Arteria',  color:'#f0abfc'},
-  {id:'io',           label:'Intraosseaali (IO)',      short:'IO',       color:'#86efac'},
   {id:'muu',          label:'Muu toimenpide',          short:'Muu',      color:'#cbd5e1'},
 ];
 function procTypeById(id){ return PROC_TYPES.find(p=>p.id===id)||PROC_TYPES[PROC_TYPES.length-1]; }

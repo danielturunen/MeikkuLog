@@ -25,7 +25,7 @@ Mobiilikäyttöön suunniteltu työvuorojen ja päivystyksen kliinisten tapahtum
 - **Traumatiimi & altistus** -mittarit: tiimivuorot ja -tunnit, osuus työajasta traumatiimissä, traumahälytyksiä per tiimivuoro, hälytyksiä per 100 h sekä osuus tiimivuoroista joissa vähintään yksi hälytys.
 
 ### Toimenpiteet & hälytykset
-- Huonekohtainen kirjaus: intubaatio, STROKE, elvytys, STEMI, massiivivuoto, sepsis, kardioversio, CVK, arteriakanyyli, IO ja muu.
+- Huonekohtainen kirjaus: intubaatio, STROKE, elvytys, STEMI, massiivivuoto, sepsis, kardioversio, tahdistus, CVK ja muu.
 - **STROKE-hälytyksille** hoitopäätös/löydös: liuotushoito, trombektomia (EVT), ei liuotushoitoa/trombektomiaa, seuranta, vuoto, ei löydöksiä, vanha infarkti.
 - **UÄ-perifeerinen suonikanylointi** omalla lopputuloksella (tarvitsi UÄ / onnistui ilman UÄ / ei onnistunut) ja onnistumis-%:lla — myös huoneittain.
 - Paikat: H1, H2, H3, H4, H5, H6, H19, Raptor-sali, T-Aula, S-Aula, RTG, Muu.
