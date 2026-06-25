@@ -49,6 +49,19 @@
     border-radius:var(--r); padding:12px; margin-bottom:8px; position:relative; overflow:hidden;}
   .shift:active{background:var(--card2);}
   .shift.past{opacity:.45;}
+  .shift.current{border-color:var(--accent); box-shadow:0 0 0 1px var(--accent) inset;}
+  .nowtag,.nexttag{display:inline-block; font-size:10px; font-weight:800; letter-spacing:.5px;
+    padding:2px 7px; border-radius:6px; margin-left:8px; vertical-align:middle;}
+  .nowtag{background:var(--accent); color:#fff;}
+  .nexttag{background:var(--card2); color:var(--accent); border:1px solid var(--accent);}
+  .todaybtn{width:auto !important; padding:0 12px; font-size:13px; font-weight:700;}
+  .backupbanner{display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap;
+    background:rgba(251,191,36,.12); border:1px solid rgba(251,191,36,.35); color:var(--text);
+    border-radius:12px; padding:10px 12px; margin-bottom:12px; font-size:13px;}
+  .backupbanner .bb-act{display:flex; gap:8px;}
+  .backupbanner button{border:none; border-radius:9px; padding:8px 12px; font-size:13px; font-weight:700; font-family:inherit;}
+  .backupbanner .bb-now{background:var(--accent); color:#fff;}
+  .backupbanner .bb-no{background:var(--card2); color:var(--muted); border:1px solid var(--line);}
   .badge{min-width:46px; border-radius:12px; display:grid; place-items:center; font-weight:800; color:#06122b; padding:6px 4px;}
   .badge .code{font-size:22px; line-height:1;}
   .shift .body{flex:1; min-width:0;}
@@ -229,9 +242,18 @@
     </div>
   </header>
 
+  <div id="backupBanner" class="backupbanner" style="display:none;">
+    <span>📦 Muista ottaa varmuuskopio — tiedot ovat vain tässä selaimessa.</span>
+    <div class="bb-act">
+      <button class="bb-now" id="backupNow">Varmuuskopioi</button>
+      <button class="bb-no" id="backupDismiss">Myöhemmin</button>
+    </div>
+  </div>
+
   <div class="monthbar">
     <button class="nav" id="prevM">‹</button>
-    <div class="m" id="monthLabel"></div>
+    <div class="m" id="monthLabel" style="flex:1; text-align:center;"></div>
+    <button class="nav todaybtn" id="todayBtn" title="Siirry nykyiseen kuukauteen" style="display:none;">Tänään</button>
     <button class="nav" id="nextM">›</button>
   </div>
 
@@ -669,17 +691,22 @@ let viewYear, viewMonth;
 (function(){ const n=new Date(); viewYear=n.getFullYear(); viewMonth=n.getMonth(); })();
 
 /* ---------- Lista ---------- */
-function renderShiftCard(s, list){
+function renderShiftCard(s, list, marks){
   const t=typeByCode(s.code);
   const d=new Date(s.date+'T12:00');
   const dayLbl=DAYS[d.getDay()]+' '+d.getDate()+'.'+(d.getMonth()+1)+'.'+d.getFullYear();
   const codeShown=(s.weCode && isWeekend(s.date) && t.we)? t.we.code : s.code;
   const totMin=s.segments.reduce((a,seg)=>a+dur(seg.start,seg.end),0);
+  let tag='';
+  if(marks){
+    if(s.id===marks.curId) tag='<span class="nowtag">NYT</span>';
+    else if(s.id===marks.nextId) tag='<span class="nexttag">SEURAAVA</span>';
+  }
   const card=document.createElement('div'); card.className='shift';
   card.innerHTML=`
     <div class="badge" style="background:${t.color}"><span class="code">${codeShown}</span></div>
     <div class="body">
-      <div class="name">${t.name}</div>
+      <div class="name">${t.name}${tag}</div>
       <div class="time">${s.start}–${s.end} · ${fmtH(totMin)}</div>
       <div class="segs">${s.segments.map(seg=>`
         <div class="seg"><span class="dot" style="background:${roleColor(seg)}"></span>
@@ -688,6 +715,7 @@ function renderShiftCard(s, list){
       ${shiftTraumaBadge(s.id)}
       ${shiftProcBadge(s.id)}
     </div>`;
+  if(marks && s.id===marks.curId) card.classList.add('current');
   if(shiftIsPast(s)) card.classList.add('past');
   card.onclick=()=>openShift(s.id);
   const wrap=document.createElement('div'); wrap.className='day';
@@ -697,6 +725,10 @@ function renderShiftCard(s, list){
 
 function render(){
   document.getElementById('monthLabel').textContent = MONTHS[viewMonth]+' '+viewYear;
+  const now=new Date();
+  document.getElementById('todayBtn').style.display =
+    (viewYear===now.getFullYear() && viewMonth===now.getMonth()) ? 'none' : '';
+  updateBackupBanner();
   const inMonth = shifts.filter(s=>{ const d=new Date(s.date+'T12:00'); return d.getFullYear()===viewYear && d.getMonth()===viewMonth; })
                         .sort((a,b)=> a.date<b.date?-1:a.date>b.date?1:0);
   let totalMin=0; inMonth.forEach(s=> s.segments.forEach(seg=> totalMin+=dur(seg.start,seg.end)));
@@ -708,12 +740,15 @@ function render(){
   list.innerHTML='';
   const upcoming=inMonth.filter(s=>!shiftIsPast(s));
   const past=inMonth.filter(s=>shiftIsPast(s));
-  upcoming.forEach(s=>renderShiftCard(s, list));
+  const cur=currentShift(); const curId=cur?cur.id:null;
+  const nextS=upcoming.find(s=>s.id!==curId); const nextId=nextS?nextS.id:null;
+  const marks={curId,nextId};
+  upcoming.forEach(s=>renderShiftCard(s, list, marks));
   if(past.length){
     const sep=document.createElement('div'); sep.className='daylabel'; sep.style.cssText='margin:18px 4px 8px; text-align:center; font-size:11px; letter-spacing:1px;';
     sep.textContent='— MENNEET VUOROT —';
     list.appendChild(sep);
-    past.forEach(s=>renderShiftCard(s, list));
+    past.forEach(s=>renderShiftCard(s, list, marks));
   }
 }
 
@@ -1015,11 +1050,28 @@ document.getElementById('prevM').onclick=()=>{ if(--viewMonth<0){viewMonth=11;vi
 document.getElementById('nextM').onclick=()=>{ if(++viewMonth>11){viewMonth=0;viewYear++;} render(); };
 
 /* ---------- Vienti ---------- */
-document.getElementById('exportBtn').onclick=()=>{
+const LS_BACKUP='tv_lastBackup', LS_BSNOOZE='tv_backupSnooze', LS_FIRST='tv_firstUse';
+function daysSince(iso){ if(!iso) return Infinity; const t=new Date(iso).getTime(); if(isNaN(t)) return Infinity; return (Date.now()-t)/86400000; }
+function updateBackupBanner(){
+  const el=document.getElementById('backupBanner'); if(!el) return;
+  const has=shifts.length||traumas.length||procs.length;
+  const show = has
+    && daysSince(localStorage.getItem(LS_BACKUP))>30
+    && daysSince(localStorage.getItem(LS_FIRST))>14
+    && daysSince(localStorage.getItem(LS_BSNOOZE))>7;
+  el.style.display = show ? 'flex' : 'none';
+}
+function doExport(){
   const blob=new Blob([JSON.stringify({shifts,traumas,procs,exported:new Date().toISOString()},null,2)],{type:'application/json'});
   const url=URL.createObjectURL(blob); const a=document.createElement('a');
   a.href=url; a.download='meikkulog-varmuuskopio.json'; a.click(); setTimeout(()=>URL.revokeObjectURL(url),1000);
-};
+  lsSet(LS_BACKUP, new Date().toISOString()); updateBackupBanner();
+}
+document.getElementById('exportBtn').onclick=doExport;
+document.getElementById('backupNow').onclick=doExport;
+document.getElementById('backupDismiss').onclick=()=>{ lsSet(LS_BSNOOZE, new Date().toISOString()); updateBackupBanner(); };
+document.getElementById('todayBtn').onclick=()=>{ const n=new Date(); viewYear=n.getFullYear(); viewMonth=n.getMonth(); render(); };
+if(!localStorage.getItem(LS_FIRST)) lsSet(LS_FIRST, new Date().toISOString());
 
 /* ---------- Tuonti ---------- */
 function migrateShift(s){
@@ -1899,6 +1951,11 @@ document.getElementById('qProc').onclick=()=>{ qMenu.classList.remove('open'); c
 
 /* ---------- Kuvan suurennos ---------- */
 document.getElementById('lightbox').onclick=()=>document.getElementById('lightbox').classList.remove('open');
+
+/* ---------- Offline-tuki ---------- */
+if('serviceWorker' in navigator){
+  window.addEventListener('load',()=>{ navigator.serviceWorker.register('sw.js').catch(()=>{}); });
+}
 
 render();
 </script>
