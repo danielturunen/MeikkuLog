@@ -1,8 +1,8 @@
 /* MeikkuLog service worker — offline-tuki.
    Network-first: verkossa saa aina tuoreimman version, offline-tilassa
    palautetaan välimuistista. Sovellus on yhdessä index.html-tiedostossa. */
-const CACHE = 'meikkulog-v1';
-const CORE = ['./', './index.html'];
+const CACHE = 'meikkulog-v2';
+const CORE = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png', './icon-180.png'];
 
 self.addEventListener('install', e => {
   e.waitUntil(
