@@ -131,6 +131,16 @@
   .btn.danger{background:rgba(248,113,113,.12); color:var(--danger); border:1px solid rgba(248,113,113,.3);}
   .btn:active{transform:scale(.98);}
   .addseg{background:var(--card2); border:1px dashed var(--line); color:var(--accent); border-radius:12px; padding:12px; width:100%; font-weight:700; font-size:14px;}
+  .reloctg{display:block; width:100%; margin-top:10px;}
+  .relocbox{background:var(--card); border:1px solid var(--line); border-radius:14px; padding:12px; margin-top:10px;}
+  .relocrow{display:flex; align-items:center; gap:10px; margin-bottom:10px;}
+  .relocrow:last-of-type{margin-bottom:0;}
+  .relocrow label{flex:none; width:130px; font-size:13px; color:var(--muted);}
+  .relocbox select, .relocbox input{flex:1; width:100%; background:var(--card2); border:1px solid var(--line); color:var(--text);
+    border-radius:10px; padding:10px; font-size:14px; font-family:inherit;}
+  .relocbox input{margin-top:8px;}
+  .relocnote{margin-top:8px; font-size:11px; font-weight:800; letter-spacing:.3px; display:inline-flex; align-items:center; gap:6px;}
+  .relocnote .arr{opacity:.7;}
   .hint{font-size:12px; color:var(--muted); line-height:1.6; margin-top:10px;}
   .hint code{background:var(--card); padding:1px 5px; border-radius:5px; font-size:11px;}
 
@@ -291,6 +301,20 @@
     <div class="seglabel">Osiot / roolit</div>
     <div id="segContainer"></div>
     <button class="addseg" id="addSegBtn">+ Jaa vuoro / lisää osio</button>
+
+    <button class="tg reloctg" id="relocToggle" type="button">Sijoitus vaihtui ennen vuoroa</button>
+    <div id="relocFields" class="relocbox" style="display:none;">
+      <div class="relocrow">
+        <label>Alkuperäinen sijoitus</label>
+        <select id="relocFrom"></select>
+      </div>
+      <div class="relocrow">
+        <label>Uusi sijoitus</label>
+        <select id="relocTo"></select>
+      </div>
+      <input type="text" id="relocFromCustom" placeholder="Alkup. — kirjoita sijoitus" style="display:none;">
+      <input type="text" id="relocToCustom" placeholder="Uusi — kirjoita sijoitus" style="display:none;">
+    </div>
 
     <div class="seglabel">Hätätilapotilaat</div>
     <div id="traumaSection"></div>
@@ -486,6 +510,13 @@ const LOCS = [
   {id:'Muu',      label:'Muu…',      color:'#cbd5e1', rhOk:true},
 ];
 const locById = id => LOCS.find(l=>l.id===id);
+/* Sijoituksen näyttönimi (tukee Muu-vapaatekstiä) */
+function locName(id, custom){
+  if(!id) return '?';
+  if(id==='Muu') return (custom&&custom.trim())||'Muu';
+  const l=locById(id); return l?l.id:id;
+}
+function locColor(id){ const l=locById(id); return l?l.color:'#cbd5e1'; }
 const SUFFIXES = {
   H2:['ane','elv','TRAU'], H3:['elv','TRAU'], H4:['elv','ane2/knk'], H5:['elv'],
   H6:['elv'], H19:['elv'], HTA:['elv'], 'T-Aula':['elv'],
@@ -712,6 +743,10 @@ function renderShiftCard(s, list, marks){
         <div class="seg"><span class="dot" style="background:${roleColor(seg)}"></span>
           <span class="st">${seg.start}–${seg.end}</span>
           <span class="rc">${esc(roleCode(seg))}</span></div>`).join('')}</div>
+      ${s.preChange?`<div class="relocnote">🔁
+        <span style="color:${locColor(s.preChange.from)}">${esc(locName(s.preChange.from,s.preChange.fromCustom))}</span>
+        <span class="arr">→</span>
+        <span style="color:${locColor(s.preChange.to)}">${esc(locName(s.preChange.to,s.preChange.toCustom))}</span></div>`:''}
       ${shiftTraumaBadge(s.id)}
       ${shiftProcBadge(s.id)}
     </div>`;
@@ -884,6 +919,32 @@ function renderStats(){
       <div class="bar"><i style="width:${Math.max(3,Math.round(r.min/maxR*100))}%;background:${r.color}"></i></div></div>`;
   });
 
+  /* sijoitusmuutokset ennen vuoroa (lasketaan myös roolittamattomista) */
+  const relocs=src0.filter(s=>s.preChange);
+  if(relocs.length){
+    const pairs={}; const fromCnt={}; const toCnt={};
+    relocs.forEach(s=>{
+      const fl=locName(s.preChange.from,s.preChange.fromCustom), tl=locName(s.preChange.to,s.preChange.toCustom);
+      const k=fl+' → '+tl;
+      pairs[k]=(pairs[k]||0)+1; fromCnt[fl]=(fromCnt[fl]||0)+1; toCnt[tl]=(toCnt[tl]||0)+1;
+    });
+    h+=`<div class="s-section">Sijoitusmuutokset ennen vuoroa</div>`;
+    h+=`<div class="hint" style="margin-top:0 0 6px">Sijoitus vaihtui <b>${relocs.length}</b> kertaa ennen vuoron alkua.</div>`;
+    const prs=Object.keys(pairs).sort((a,b)=>pairs[b]-pairs[a]);
+    const maxP=Math.max.apply(null,prs.map(k=>pairs[k]));
+    prs.forEach(k=>{
+      h+=`<div class="brow"><div class="l1">
+        <span class="nm" style="flex:1">${esc(k)}</span>
+        <span class="mt"><b>${pairs[k]}</b>×</span></div>
+        <div class="bar"><i style="width:${Math.max(3,Math.round(pairs[k]/maxP*100))}%;background:var(--warn)"></i></div></div>`;
+    });
+    const topFrom=Object.keys(fromCnt).sort((a,b)=>fromCnt[b]-fromCnt[a]);
+    const topTo=Object.keys(toCnt).sort((a,b)=>toCnt[b]-toCnt[a]);
+    h+='<div style="margin-top:6px">'
+      +'<span class="chipstat">Useimmin pois: '+esc(topFrom[0])+' <b>×'+fromCnt[topFrom[0]]+'</b></span>'
+      +'<span class="chipstat">Useimmin uudeksi: '+esc(topTo[0])+' <b>×'+toCnt[topTo[0]]+'</b></span></div>';
+  }
+
   /* erikoisroolit & lisät */
   const chips=[];
   if(cnt(vastSet)) chips.push(['Vastaava ( )',cnt(vastSet)]);
@@ -1012,21 +1073,52 @@ function addSeg(){
   draft.segments.push(ns); syncMeta(); buildSegs();
 }
 
+/* Sijoitusmuutos ennen vuoroa (alkuperäinen → toteutunut) */
+function locOptions(sel){
+  return LOCS.map(o=>`<option value="${o.id}"${o.id===sel?' selected':''}>${esc(o.label)}</option>`).join('');
+}
+function buildReloc(){
+  const on=!!draft.preChange;
+  const tog=document.getElementById('relocToggle');
+  const box=document.getElementById('relocFields');
+  tog.classList.toggle('on', on);
+  box.style.display = on ? 'block' : 'none';
+  if(!on) return;
+  const pc=draft.preChange;
+  const fromSel=document.getElementById('relocFrom'), toSel=document.getElementById('relocTo');
+  fromSel.innerHTML=locOptions(pc.from); toSel.innerHTML=locOptions(pc.to);
+  const fc=document.getElementById('relocFromCustom'), tc=document.getElementById('relocToCustom');
+  fc.style.display = pc.from==='Muu' ? 'block' : 'none'; fc.value=pc.fromCustom||'';
+  tc.style.display = pc.to==='Muu' ? 'block' : 'none'; tc.value=pc.toCustom||'';
+}
+document.getElementById('relocToggle').onclick=()=>{
+  if(draft.preChange){ draft.preChange=null; }
+  else {
+    const first=draft.segments[0]||{};
+    draft.preChange={from:'H2', to:first.loc||'H2', fromCustom:'', toCustom:first.custom||''};
+  }
+  buildReloc();
+};
+document.getElementById('relocFrom').onchange=e=>{ draft.preChange.from=e.target.value; buildReloc(); };
+document.getElementById('relocTo').onchange=e=>{ draft.preChange.to=e.target.value; buildReloc(); };
+document.getElementById('relocFromCustom').oninput=e=>{ draft.preChange.fromCustom=e.target.value; };
+document.getElementById('relocToCustom').oninput=e=>{ draft.preChange.toCustom=e.target.value; };
+
 function openShift(id){
   editingId=id; draft=JSON.parse(JSON.stringify(shifts.find(x=>x.id===id)));
   document.getElementById('sheetTitle').textContent='Muokkaa vuoroa';
   document.getElementById('deleteShift').style.display='block';
   document.getElementById('fDate').value=draft.date;
-  buildTypeGrid(); buildSegs(); buildTraumaSection(); buildProcSection();
+  buildTypeGrid(); buildSegs(); buildReloc(); buildTraumaSection(); buildProcSection();
   document.getElementById('shiftSheet').classList.add('open');
 }
 function openNew(){
   editingId=null; const today=ymd(new Date());
-  draft={id:rid(), date:today, code:'A', weCode:false, segments:[], start:'', end:''};
+  draft={id:rid(), date:today, code:'A', weCode:false, segments:[], start:'', end:'', preChange:null};
   document.getElementById('sheetTitle').textContent='Lisää vuoro';
   document.getElementById('deleteShift').style.display='none';
   document.getElementById('fDate').value=today;
-  selectType('A'); buildTraumaSection(); buildProcSection();
+  selectType('A'); buildReloc(); buildTraumaSection(); buildProcSection();
   document.getElementById('shiftSheet').classList.add('open');
 }
 function closeShift(){ document.getElementById('shiftSheet').classList.remove('open'); }
@@ -1040,6 +1132,12 @@ document.getElementById('saveShift').onclick=()=>{
   for(const s of draft.segments){ if(s.loc==='Muu' && !s.custom.trim()){ alert('Kirjoita rooli "Muu"-osiolle tai valitse sijainti.'); return; } }
   const rec={id:editingId||draft.id||rid(), date:draft.date, code:draft.code, weCode:draft.weCode, start:draft.start, end:draft.end,
     segments:draft.segments.map(s=>({start:s.start,end:s.end,loc:s.loc,vastaava:s.vastaava,suffix:s.suffix,rh:s.rh,custom:s.custom}))};
+  if(draft.preChange){
+    const pc=draft.preChange;
+    rec.preChange={from:pc.from, to:pc.to,
+      fromCustom:pc.from==='Muu'?(pc.fromCustom||'').trim():'',
+      toCustom:pc.to==='Muu'?(pc.toCustom||'').trim():''};
+  }
   if(editingId){ shifts[shifts.findIndex(x=>x.id===editingId)]=rec; } else shifts.push(rec);
   saveShifts(); closeShift();
   const d=new Date(rec.date+'T12:00'); viewYear=d.getFullYear(); viewMonth=d.getMonth(); render();
