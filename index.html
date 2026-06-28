@@ -454,6 +454,8 @@
 
     <div id="pStrokeWrap" style="display:none;"></div>
 
+    <div id="pCprWrap" style="display:none;"></div>
+
     <label class="fl">Huone / sijainti</label>
     <div class="chips" id="pRoomChips"></div>
 
@@ -663,6 +665,12 @@ const CANNULA_OUTCOMES=[
   {id:'ei_onnistunut',label:'En saanut laitettua', short:'Ei onnist.',  color:'#f87171'},
 ];
 function outcomeById(id){ return CANNULA_OUTCOMES.find(o=>o.id===id); }
+
+/* Elvytys — oma rooli, alkurytmi ja lopputulos */
+const CPR_ROLES=['Johtaja','Deffahoitaja','Hengityshoitaja','Painelija 1','Painelija 2'];
+const CPR_RHYTHMS=['VF','Pulssiton VT','PEA','Asystolia','Ei tiedossa'];
+const CPR_OUTCOMES=['ROSC','Eloton'];
+function cprOutcomeColor(o){ return o==='ROSC' ? '#34d399' : '#f87171'; }
 
 /* Toimenpiteiden paikat (S-Aula ja RTG eivät ole vuorosijoituksia) */
 const PROC_ROOMS=[
@@ -1568,7 +1576,8 @@ function traumaMatch(t,q){
 }
 function procMatch(p,q){
   const pt=procTypeById(p.type); const oc=p.outcome?outcomeById(p.outcome):null;
-  return [pt.label, p.room?procRoomById(p.room).label:'', p.notes, (p.strokeDecision||[]).join(' '), oc?oc.label:'', p.date]
+  return [pt.label, p.room?procRoomById(p.room).label:'', p.notes, (p.strokeDecision||[]).join(' '), oc?oc.label:'',
+          p.cprRole||'', p.cprRhythm||'', p.cprOutcome||'', p.date]
     .join(' ').toLowerCase().includes(q);
 }
 
@@ -1745,7 +1754,8 @@ function shiftProcBadge(shiftId){
   if(!list.length) return '';
   return '<div style="margin-top:6px; display:flex; flex-wrap:wrap; gap:5px;">'
     + list.map(p=>{ const pt=procTypeById(p.type);
-        return `<span class="traumatag" style="background:${pt.color}">${pt.short}</span>`; }).join('')
+        const suff=(p.type==='elvytys'&&p.cprOutcome)?` · ${esc(p.cprOutcome)}`:'';
+        return `<span class="traumatag" style="background:${pt.color}">${pt.short}${suff}</span>`; }).join('')
     + '</div>';
 }
 function procRowHTML(p){
@@ -1757,6 +1767,10 @@ function procRowHTML(p){
       ${p.room?`<span class="tage">${esc(procRoomById(p.room).label)}</span>`:''}
       <span class="td">${dl}</span></div>
     ${oc?`<div style="margin:2px 0 4px;"><span class="traumatag" style="background:${oc.color}">${oc.label}</span></div>`:''}
+    ${(p.type==='elvytys'&&(p.cprRole||p.cprRhythm||p.cprOutcome))?`<div style="margin:3px 0 4px; display:flex; flex-wrap:wrap; gap:4px; align-items:center;">
+      ${p.cprRole?`<span class="ptag">${esc(p.cprRole)}</span>`:''}
+      ${p.cprRhythm?`<span class="ptag">Alkurytmi: ${esc(p.cprRhythm)}</span>`:''}
+      ${p.cprOutcome?`<span class="traumatag" style="background:${cprOutcomeColor(p.cprOutcome)}">${esc(p.cprOutcome)}</span>`:''}</div>`:''}
     ${(p.strokeDecision&&p.strokeDecision.length)?`<div style="margin:3px 0 4px; display:flex; flex-wrap:wrap; gap:4px;">
       ${p.strokeDecision.map(x=>`<span class="ptag">${esc(x)}</span>`).join('')}</div>`:''}
     ${p.notes?`<div class="tinj">${esc(p.notes)}</div>`:''}
@@ -1780,7 +1794,7 @@ function buildProcTypeGrid(){
     b.innerHTML=`<span class="dot" style="background:${p.color}"></span>${p.label}`;
     b.onclick=()=>{ procDraft.type=p.id;
       if(!procTypeById(p.id).cannula) procDraft.outcome=''; else if(!procDraft.outcome) procDraft.outcome='ua_tarvittu';
-      buildProcTypeGrid(); buildProcOutcome(); buildProcStroke(); };
+      buildProcTypeGrid(); buildProcOutcome(); buildProcStroke(); buildProcCpr(); };
     g.appendChild(b);
   });
 }
@@ -1792,6 +1806,23 @@ function buildProcStroke(){
   renderChips(document.getElementById('pStroke'), STROKE_DECISIONS,
     o=>(procDraft.strokeDecision||[]).includes(o),
     v=>{ const a=procDraft.strokeDecision||(procDraft.strokeDecision=[]); const i=a.indexOf(v); if(i<0)a.push(v); else a.splice(i,1); buildProcStroke(); });
+}
+function buildProcCpr(){
+  const wrap=document.getElementById('pCprWrap');
+  if(procDraft.type!=='elvytys'){ wrap.style.display='none'; wrap.innerHTML=''; return; }
+  wrap.style.display='block';
+  wrap.innerHTML='<label class="fl">Rooli elvytysryhmässä</label><div class="chips" id="pCprRole"></div>'
+    +'<label class="fl">Alkurytmi</label><div class="chips" id="pCprRhythm"></div>'
+    +'<label class="fl">Lopputulos</label><div class="chips" id="pCprOutcome"></div>';
+  renderChips(document.getElementById('pCprRole'), CPR_ROLES,
+    o=>procDraft.cprRole===o,
+    v=>{ procDraft.cprRole = procDraft.cprRole===v?'':v; buildProcCpr(); });
+  renderChips(document.getElementById('pCprRhythm'), CPR_RHYTHMS,
+    o=>procDraft.cprRhythm===o,
+    v=>{ procDraft.cprRhythm = procDraft.cprRhythm===v?'':v; buildProcCpr(); });
+  renderChips(document.getElementById('pCprOutcome'), CPR_OUTCOMES,
+    o=>procDraft.cprOutcome===o,
+    v=>{ procDraft.cprOutcome = procDraft.cprOutcome===v?'':v; buildProcCpr(); }, cprOutcomeColor);
 }
 function buildProcOutcome(){
   const wrap=document.getElementById('pOutcomeWrap'), g=document.getElementById('pOutcomeGrid');
@@ -1828,7 +1859,7 @@ document.getElementById('pImgInput').onchange=async e=>{
 function fillProcForm(){
   document.getElementById('pDate').value=procDraft.date;
   document.getElementById('pNotes').value=procDraft.notes||'';
-  buildProcTypeGrid(); buildProcOutcome(); buildProcStroke(); buildProcRoomChips(); buildProcImgs();
+  buildProcTypeGrid(); buildProcOutcome(); buildProcStroke(); buildProcCpr(); buildProcRoomChips(); buildProcImgs();
 }
 function openProc(id, returnTo){
   editingProcId=id; procReturnTo=returnTo;
@@ -1839,7 +1870,7 @@ function openProc(id, returnTo){
 }
 function openNewProc(pre, returnTo){
   editingProcId=null; procReturnTo=returnTo;
-  procDraft=Object.assign({id:null, shiftId:null, date:ymd(new Date()), type:'intubaatio', room:'H2', outcome:'', strokeDecision:[], notes:'', imgs:[]}, pre||{});
+  procDraft=Object.assign({id:null, shiftId:null, date:ymd(new Date()), type:'intubaatio', room:'H2', outcome:'', strokeDecision:[], cprRole:'', cprRhythm:'', cprOutcome:'', notes:'', imgs:[]}, pre||{});
   document.getElementById('procTitle').textContent='Uusi toimenpide';
   document.getElementById('deleteProc').style.display='none';
   fillProcForm(); document.getElementById('procSheet').classList.add('open');
@@ -1856,6 +1887,7 @@ document.getElementById('saveProc').onclick=()=>{
   procDraft.notes=document.getElementById('pNotes').value.trim();
   if(!procTypeById(procDraft.type).cannula) procDraft.outcome='';
   if(procDraft.type!=='stroke') procDraft.strokeDecision=[];
+  if(procDraft.type!=='elvytys'){ procDraft.cprRole=''; procDraft.cprRhythm=''; procDraft.cprOutcome=''; }
   if(editingProcId){ procs[procs.findIndex(p=>p.id===editingProcId)]=procDraft; }
   else { procDraft.id=rid(); procDraft.created=Date.now(); procs.push(procDraft); }
   saveProcs(); closeProc();
@@ -1993,6 +2025,41 @@ function renderProcLog(){
       sRows.forEach(r=>{ st+=`<div class="brow"><div class="l1">
         <span class="nm">${esc(r.x)}</span><span class="mt"><b>${r.n}</b> kpl</span></div>
         <div class="bar"><i style="width:${Math.max(3,Math.round(r.n/maxS*100))}%;background:#a5b4fc"></i></div></div>`; });
+    }
+  }
+
+  /* ELVYTYS — rooli, alkurytmi, lopputulos */
+  const cprs=all.filter(p=>p.type==='elvytys');
+  if(cprs.length){
+    const rosc=cprs.filter(p=>p.cprOutcome==='ROSC').length;
+    const eloton=cprs.filter(p=>p.cprOutcome==='Eloton').length;
+    const decided=rosc+eloton;
+    st+='<div class="s-section">Elvytykset</div>';
+    st+='<div class="tilegrid">'
+      + tile(cprs.length,'Elvytystä')
+      + tile(rosc,'ROSC')
+      + tile(eloton,'Eloton')
+      + tile(decided?Math.round(rosc/decided*100)+' %':'–','ROSC-%')
+      + '</div>';
+    // roolit
+    const byRole={}; cprs.forEach(p=>{ if(p.cprRole) byRole[p.cprRole]=(byRole[p.cprRole]||0)+1; });
+    const roleRows=CPR_ROLES.filter(r=>byRole[r]).map(r=>({r,n:byRole[r]}));
+    if(roleRows.length){
+      const maxRl=Math.max.apply(null,roleRows.map(x=>x.n).concat([1]));
+      st+='<div class="miniL" style="margin:12px 2px 2px;">Oma rooli</div>';
+      roleRows.forEach(x=>{ st+=`<div class="brow"><div class="l1">
+        <span class="nm">${esc(x.r)}</span><span class="mt"><b>${x.n}</b> kpl</span></div>
+        <div class="bar"><i style="width:${Math.max(3,Math.round(x.n/maxRl*100))}%;background:#f87171"></i></div></div>`; });
+    }
+    // alkurytmit
+    const byRhythm={}; cprs.forEach(p=>{ if(p.cprRhythm) byRhythm[p.cprRhythm]=(byRhythm[p.cprRhythm]||0)+1; });
+    const rhythmRows=CPR_RHYTHMS.filter(r=>byRhythm[r]).map(r=>({r,n:byRhythm[r]}));
+    if(rhythmRows.length){
+      const maxRh=Math.max.apply(null,rhythmRows.map(x=>x.n).concat([1]));
+      st+='<div class="miniL" style="margin:12px 2px 2px;">Alkurytmi</div>';
+      rhythmRows.forEach(x=>{ st+=`<div class="brow"><div class="l1">
+        <span class="nm">${esc(x.r)}</span><span class="mt"><b>${x.n}</b> kpl</span></div>
+        <div class="bar"><i style="width:${Math.max(3,Math.round(x.n/maxRh*100))}%;background:#fdba74"></i></div></div>`; });
     }
   }
 
