@@ -791,7 +791,7 @@ function render(){
     const sep=document.createElement('div'); sep.className='daylabel'; sep.style.cssText='margin:18px 4px 8px; text-align:center; font-size:11px; letter-spacing:1px;';
     sep.textContent='— MENNEET VUOROT —';
     list.appendChild(sep);
-    past.forEach(s=>renderShiftCard(s, list, marks));
+    past.slice().reverse().forEach(s=>renderShiftCard(s, list, marks));
   }
 }
 
