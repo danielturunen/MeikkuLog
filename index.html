@@ -641,6 +641,15 @@ function canonRole(s){
 const LS_PROCS='tv_procs';
 let procs = JSON.parse(localStorage.getItem(LS_PROCS)||'[]');
 function saveProcs(){ lsSet(LS_PROCS, JSON.stringify(procs)); }
+/* Migraatio: vanhat elvytyksen lopputulokset uusiin sanamuotoihin */
+(function migrateCprOutcomes(){
+  let changed=false;
+  procs.forEach(p=>{
+    if(p.cprOutcome==='ROSC'){ p.cprOutcome='ROSC saavutettu'; changed=true; }
+    else if(p.cprOutcome==='Eloton'){ p.cprOutcome='ROSC ei saavutettu'; changed=true; }
+  });
+  if(changed) saveProcs();
+})();
 
 /* Meilahden päivystyksessä mahdollisia tilanteita — voi tapahtua missä huoneessa tahansa */
 const PROC_TYPES=[
@@ -669,8 +678,8 @@ function outcomeById(id){ return CANNULA_OUTCOMES.find(o=>o.id===id); }
 /* Elvytys — oma rooli, alkurytmi ja lopputulos */
 const CPR_ROLES=['Johtaja','Deffahoitaja','Hengityshoitaja','Painelija 1','Painelija 2'];
 const CPR_RHYTHMS=['VF','Pulssiton VT','PEA','Asystolia','Ei tiedossa'];
-const CPR_OUTCOMES=['ROSC','Eloton'];
-function cprOutcomeColor(o){ return o==='ROSC' ? '#34d399' : '#f87171'; }
+const CPR_OUTCOMES=['ROSC saavutettu','ROSC ei saavutettu'];
+function cprOutcomeColor(o){ return o==='ROSC saavutettu' ? '#34d399' : '#f87171'; }
 
 /* Toimenpiteiden paikat (S-Aula ja RTG eivät ole vuorosijoituksia) */
 const PROC_ROOMS=[
@@ -2031,14 +2040,14 @@ function renderProcLog(){
   /* ELVYTYS — rooli, alkurytmi, lopputulos */
   const cprs=all.filter(p=>p.type==='elvytys');
   if(cprs.length){
-    const rosc=cprs.filter(p=>p.cprOutcome==='ROSC').length;
-    const eloton=cprs.filter(p=>p.cprOutcome==='Eloton').length;
+    const rosc=cprs.filter(p=>p.cprOutcome==='ROSC saavutettu').length;
+    const eloton=cprs.filter(p=>p.cprOutcome==='ROSC ei saavutettu').length;
     const decided=rosc+eloton;
     st+='<div class="s-section">Elvytykset</div>';
     st+='<div class="tilegrid">'
       + tile(cprs.length,'Elvytystä')
-      + tile(rosc,'ROSC')
-      + tile(eloton,'Eloton')
+      + tile(rosc,'ROSC saavutettu')
+      + tile(eloton,'ROSC ei saavutettu')
       + tile(decided?Math.round(rosc/decided*100)+' %':'–','ROSC-%')
       + '</div>';
     // roolit
