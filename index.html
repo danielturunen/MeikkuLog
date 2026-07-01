@@ -788,14 +788,26 @@ function render(){
   document.getElementById('stHours').textContent = fmtH(totalMin);
 
   const list=document.getElementById('list');
-  if(!inMonth.length){ list.innerHTML='<div class="empty"><div class="big">📋</div>Ei vuoroja tässä kuussa.<br>Lisää + napista tai tuo vuorot ⤒ napista.</div>'; return; }
+  const viewingCurrentMonth = (viewYear===now.getFullYear() && viewMonth===now.getMonth());
+  const gNext = nextShift();
+  const gNextOutOfMonth = viewingCurrentMonth && gNext &&
+    !(new Date(gNext.date+'T12:00').getFullYear()===viewYear && new Date(gNext.date+'T12:00').getMonth()===viewMonth);
+  if(!inMonth.length && !gNextOutOfMonth){ list.innerHTML='<div class="empty"><div class="big">📋</div>Ei vuoroja tässä kuussa.<br>Lisää + napista tai tuo vuorot ⤒ napista.</div>'; return; }
   list.innerHTML='';
   const upcoming=inMonth.filter(s=>!shiftIsPast(s));
   const past=inMonth.filter(s=>shiftIsPast(s));
   const cur=currentShift(); const curId=cur?cur.id:null;
-  const nextS=upcoming.find(s=>s.id!==curId); const nextId=nextS?nextS.id:null;
+  const nextS=upcoming.find(s=>s.id!==curId);
+  const nextId = nextS ? nextS.id : (gNextOutOfMonth ? gNext.id : null);
   const marks={curId,nextId};
   upcoming.forEach(s=>renderShiftCard(s, list, marks));
+  if(gNextOutOfMonth){
+    const sep=document.createElement('div'); sep.className='daylabel';
+    sep.style.cssText='margin:18px 4px 8px; text-align:center; font-size:11px; letter-spacing:1px;';
+    sep.textContent='— SEURAAVA VUORO ENSI KUUSSA —';
+    list.appendChild(sep);
+    renderShiftCard(gNext, list, marks);
+  }
   if(past.length){
     const sep=document.createElement('div'); sep.className='daylabel'; sep.style.cssText='margin:18px 4px 8px; text-align:center; font-size:11px; letter-spacing:1px;';
     sep.textContent='— MENNEET VUOROT —';
@@ -817,6 +829,15 @@ function shiftRealEnd(s){
 
 function shiftIsPast(s){
   return new Date() > shiftRealEnd(s);
+}
+function shiftStartDate(s){
+  return new Date(s.date+'T'+(s.start||(s.segments[0]&&s.segments[0].start)||'00:00'));
+}
+/* Seuraava vielä alkamaton vuoro koko historiasta (yli kuukausirajojen) */
+function nextShift(){
+  const now=new Date();
+  return shifts.filter(s=>shiftStartDate(s)>now)
+    .sort((a,b)=>shiftStartDate(a)-shiftStartDate(b))[0] || null;
 }
 
 /* ---------- Roolitilastot ---------- */
