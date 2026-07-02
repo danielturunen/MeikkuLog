@@ -637,10 +637,14 @@ function canonRole(s){
   if(/amb/i.test(s)) return 'AMBreboa';
   return '';
 }
-/* Normalisoi aiemmin tallennetut roolit kanonisiksi (ajetaan myös tuonnin jälkeen) */
+/* Normalisoi aiemmin tallennetut arvot (ajetaan myös tuonnin jälkeen) */
 function migrateTraumaRoles(){
   let changed=false;
-  traumas.forEach(t=>{ const c=canonRole(t.role); if(c!==(t.role||'')){ t.role=c; changed=true; } });
+  traumas.forEach(t=>{
+    const c=canonRole(t.role); if(c!==(t.role||'')){ t.role=c; changed=true; }
+    if(t.edDischarge==='Kyllä'){ t.edDischarge='Kotiutui'; changed=true; }
+    else if(t.edDischarge==='Ei'){ t.edDischarge=''; changed=true; }
+  });
   if(changed) saveTraumas();
 }
 migrateTraumaRoles();
@@ -722,6 +726,9 @@ const DISPOSITION_DETAILS={
 };
 /* Raptor-hälytyksessä angio/leikkaus voidaan tehdä Raptorissa, leikkurissa tai angiosalissa */
 const RAPTOR_VENUES=['Raptor','Leikkuri','Angiosali'];
+/* Päivystyksessä hoidetun potilaan jatko: minne matka jatkui päivystyksestä */
+const ED_NEXT=['Kotiutui','Vuodeosastolle','Teho-osastolle','Leikkaussaliin','Muu'];
+function edNextColor(o){ return o==='Kotiutui' ? '#34d399' : '#4f8cff'; }
 function isRaptorType(id){ return id==='raptor_vakaa' || id==='raptor_instabiili'; }
 const STROKE_DECISIONS=['Liuotushoito','Trombektomia (EVT)','Ei liuotushoitoa','Ei trombektomiaa',
   'Seuranta','Vuoto','Ei löydöksiä','Vanha infarkti'];
@@ -1350,7 +1357,7 @@ function traumaRowHTML(t){
       ${t.survived?`<span class="ptag" style="background:${t.survived==='Kyllä'?'#34d399':'#f87171'}; color:#06122b; border-color:transparent;">${t.survived==='Kyllä'?'Elossa':'Menehtyi'}</span>`:''}
       ${t.raptorVenue?`<span class="ptag" style="background:#f9a8d4; color:#06122b; border-color:transparent;">Tmp: ${esc(t.raptorVenue)}</span>`:''}
       ${(t.disposition||[]).map(x=>{ const d=(t.dispositionDetail||{})[x]; return `<span class="ptag">${esc(x)}${d?' · '+esc(d):''}</span>`; }).join('')}
-      ${t.edDischarge?`<span class="ptag" style="${t.edDischarge==='Kyllä'?'background:#34d399; color:#06122b; border-color:transparent;':''}">${t.edDischarge==='Kyllä'?'Kotiutui päivystyksestä':'Ei kotiutunut päivystyksestä'}</span>`:''}
+      ${t.edDischarge?`<span class="ptag" style="${t.edDischarge==='Kotiutui'?'background:#34d399; color:#06122b; border-color:transparent;':''}">${t.edDischarge==='Kotiutui'?'Kotiutui päivystyksestä':'Päivystyksestä → '+esc(t.edDischarge)}</span>`:''}
     </div>`:''}
     ${t.role?`<div class="tnote">Rooli: ${esc(t.role)}</div>`:''}
     ${t.notes?`<div class="tnote">${esc(t.notes)}</div>`:''}
@@ -1418,14 +1425,14 @@ function buildTraumaExtra(){
       o=>(traumaDraft.dispositionDetail||{})[x]===o,
       v=>{ const m=traumaDraft.dispositionDetail||(traumaDraft.dispositionDetail={}); m[x]=(m[x]===v?'':v); buildTraumaExtra(); });
   });
-  /* Päivystyksessä hoidetuille: kotiutuiko suoraan päivystyksestä */
+  /* Päivystyksessä hoidetuille: minne matka jatkui päivystyksestä */
   const eh=document.getElementById('tEdHome');
   if((traumaDraft.disposition||[]).includes('Päivystyksessä')){
-    eh.innerHTML='<label class="fl">Kotiutuiko päivystyksestä</label><div class="chips" id="tEdHomeChips"></div>';
-    renderChips(document.getElementById('tEdHomeChips'), ['Kyllä','Ei'],
+    eh.innerHTML='<label class="fl">Jatko päivystyksestä</label><div class="chips" id="tEdHomeChips"></div>';
+    renderChips(document.getElementById('tEdHomeChips'), ED_NEXT,
       o=>traumaDraft.edDischarge===o,
       v=>{ traumaDraft.edDischarge=(traumaDraft.edDischarge===v?'':v); buildTraumaExtra(); },
-      o=>o==='Kyllä'?'#34d399':'#f87171');
+      edNextColor);
   } else eh.innerHTML='';
 }
 function buildTraumaRoleChips(){
@@ -1651,7 +1658,7 @@ function traumaMatch(t,q){
   const tt=traumaTypeById(t.type);
   return [tt.label, t.age, t.mechanism, t.injuries, t.notes, t.role, t.traumaKind, t.survived, t.raptorVenue,
     (t.disposition||[]).join(' '), Object.keys(t.dispositionDetail||{}).map(k=>t.dispositionDetail[k]).join(' '),
-    t.edDischarge==='Kyllä'?'kotiutui päivystyksestä':'', t.date]
+    t.edDischarge?(t.edDischarge==='Kotiutui'?'kotiutui päivystyksestä':'päivystyksestä '+t.edDischarge):'', t.date]
     .join(' ').toLowerCase().includes(q);
 }
 function procMatch(p,q){
@@ -1820,14 +1827,13 @@ function renderPatientLog(){
     dRows.forEach(r=>{ st+=`<div class="brow"><div class="l1">
       <span class="nm">${esc(r.x)}</span><span class="mt"><b>${r.n}</b> kpl</span></div>
       <div class="bar"><i style="width:${Math.max(3,Math.round(r.n/maxDp*100))}%;background:#4f8cff"></i></div></div>`; });
-    /* päivystyksessä hoidetut: kotiutuminen */
-    const edHome=alerts.filter(t=>t.edDischarge==='Kyllä').length;
-    const edStay=alerts.filter(t=>t.edDischarge==='Ei').length;
-    if(edHome||edStay){
-      st+='<div style="margin-top:6px">'
-        +`<span class="chipstat">Kotiutui päivystyksestä <b>×${edHome}</b></span>`
-        +(edStay?`<span class="chipstat">Ei kotiutunut <b>×${edStay}</b></span>`:'')
-        +'</div>';
+    /* päivystyksessä hoidetut: minne matka jatkui */
+    const edN={}; alerts.forEach(t=>{ if(t.edDischarge) edN[t.edDischarge]=(edN[t.edDischarge]||0)+1; });
+    const edKeys=ED_NEXT.filter(o=>edN[o]);
+    if(edKeys.length){
+      st+='<div class="miniL" style="margin:10px 2px 2px;">Jatko päivystyksestä</div><div style="margin-top:6px">'
+        + edKeys.map(o=>`<span class="chipstat"><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${edNextColor(o)}"></span> ${esc(o)} <b>×${edN[o]}</b></span>`).join('')
+        + '</div>';
     }
   }
 
