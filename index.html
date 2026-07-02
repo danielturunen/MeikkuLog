@@ -647,6 +647,7 @@ function saveProcs(){ lsSet(LS_PROCS, JSON.stringify(procs)); }
   procs.forEach(p=>{
     if(p.cprOutcome==='ROSC'){ p.cprOutcome='ROSC saavutettu'; changed=true; }
     else if(p.cprOutcome==='Eloton'){ p.cprOutcome='ROSC ei saavutettu'; changed=true; }
+    if(p.cprRole==='Painelija 1'||p.cprRole==='Painelija 2'){ p.cprRole='Painelija'; changed=true; }
   });
   if(changed) saveProcs();
 })();
@@ -676,7 +677,7 @@ const CANNULA_OUTCOMES=[
 function outcomeById(id){ return CANNULA_OUTCOMES.find(o=>o.id===id); }
 
 /* Elvytys — oma rooli, alkurytmi ja lopputulos */
-const CPR_ROLES=['Johtaja','Deffahoitaja','Hengityshoitaja','Painelija 1','Painelija 2'];
+const CPR_ROLES=['Johtaja','Deffahoitaja','Hengityshoitaja','Painelija'];
 const CPR_RHYTHMS=['VF','Pulssiton VT','PEA','Asystolia','Ei tiedossa'];
 const CPR_OUTCOMES=['ROSC saavutettu','ROSC ei saavutettu'];
 function cprOutcomeColor(o){ return o==='ROSC saavutettu' ? '#34d399' : '#f87171'; }
