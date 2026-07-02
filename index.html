@@ -90,7 +90,7 @@
   .grab{width:40px; height:5px; border-radius:5px; background:var(--line); margin:6px auto 12px;}
   .panel h2{margin:4px 0 14px; font-size:19px;}
   label.fl{display:block; font-size:12px; color:var(--muted); margin:14px 0 6px; text-transform:uppercase; letter-spacing:.5px;}
-  input[type=date],input[type=time],input[type=text],input[type=file]{width:100%; background:var(--card); border:1px solid var(--line);
+  input[type=date],input[type=time],input[type=text],input[type=number],input[type=file]{width:100%; background:var(--card); border:1px solid var(--line);
     color:var(--text); border-radius:12px; padding:13px 12px; font-size:16px; font-family:inherit; min-height:48px;}
   textarea{width:100%; background:var(--card); border:1px solid var(--line); color:var(--text); border-radius:12px;
     padding:12px; font-size:13px; font-family:ui-monospace,Menlo,Consolas,monospace; min-height:130px; resize:vertical;}
@@ -694,6 +694,8 @@ const CPR_ROLES=['Johtaja','Deffahoitaja','Hengityshoitaja','Painelija'];
 const CPR_RHYTHMS=['VF','Pulssiton VT','PEA','Asystolia','Ei tiedossa'];
 const CPR_OUTCOMES=['ROSC saavutettu','ROSC ei saavutettu'];
 function cprOutcomeColor(o){ return o==='ROSC saavutettu' ? '#34d399' : '#f87171'; }
+const CPR_IO=['Kyllä','Ei'];
+const CPR_AIRWAYS=['iGel','Intubaatio','Molemmat'];
 
 /* Toimenpiteiden paikat (S-Aula ja RTG eivät ole vuorosijoituksia) */
 const PROC_ROOMS=[
@@ -1664,7 +1666,7 @@ function traumaMatch(t,q){
 function procMatch(p,q){
   const pt=procTypeById(p.type); const oc=p.outcome?outcomeById(p.outcome):null;
   return [pt.label, p.room?procRoomById(p.room).label:'', p.notes, (p.strokeDecision||[]).join(' '), oc?oc.label:'',
-          p.cprRole||'', p.cprRhythm||'', p.cprOutcome||'', p.date]
+          p.cprRole||'', p.cprRhythm||'', p.cprOutcome||'', p.cprIo==='Kyllä'?'io-yhteys':'', p.cprAirway||'', p.date]
     .join(' ').toLowerCase().includes(q);
 }
 
@@ -1862,9 +1864,12 @@ function procRowHTML(p){
       ${p.room?`<span class="tage">${esc(procRoomById(p.room).label)}</span>`:''}
       <span class="td">${dl}</span></div>
     ${oc?`<div style="margin:2px 0 4px;"><span class="traumatag" style="background:${oc.color}">${oc.label}</span></div>`:''}
-    ${(p.type==='elvytys'&&(p.cprRole||p.cprRhythm||p.cprOutcome))?`<div style="margin:3px 0 4px; display:flex; flex-wrap:wrap; gap:4px; align-items:center;">
+    ${(p.type==='elvytys'&&(p.cprRole||p.cprRhythm||p.cprOutcome||p.cprIo||p.cprAirway||p.cprDefibs!==''&&p.cprDefibs!=null))?`<div style="margin:3px 0 4px; display:flex; flex-wrap:wrap; gap:4px; align-items:center;">
       ${p.cprRole?`<span class="ptag">${esc(p.cprRole)}</span>`:''}
       ${p.cprRhythm?`<span class="ptag">Alkurytmi: ${esc(p.cprRhythm)}</span>`:''}
+      ${p.cprIo==='Kyllä'?`<span class="ptag">IO-yhteys</span>`:''}
+      ${p.cprAirway?`<span class="ptag">${p.cprAirway==='Molemmat'?'iGel + intubaatio':esc(p.cprAirway)}</span>`:''}
+      ${(p.cprDefibs!==''&&p.cprDefibs!=null)?`<span class="ptag">Deffa ×${p.cprDefibs}</span>`:''}
       ${p.cprOutcome?`<span class="traumatag" style="background:${cprOutcomeColor(p.cprOutcome)}">${esc(p.cprOutcome)}</span>`:''}</div>`:''}
     ${(p.strokeDecision&&p.strokeDecision.length)?`<div style="margin:3px 0 4px; display:flex; flex-wrap:wrap; gap:4px;">
       ${p.strokeDecision.map(x=>`<span class="ptag">${esc(x)}</span>`).join('')}</div>`:''}
@@ -1908,6 +1913,10 @@ function buildProcCpr(){
   wrap.style.display='block';
   wrap.innerHTML='<label class="fl">Rooli elvytysryhmässä</label><div class="chips" id="pCprRole"></div>'
     +'<label class="fl">Alkurytmi</label><div class="chips" id="pCprRhythm"></div>'
+    +'<label class="fl">IO-yhteys laitettu</label><div class="chips" id="pCprIo"></div>'
+    +'<label class="fl">Hengitystie</label><div class="chips" id="pCprAirway"></div>'
+    +'<label class="fl">Defibrillaatiot elvytyksen aikana (kpl)</label>'
+    +'<input type="number" id="pCprDefibs" min="0" step="1" inputmode="numeric" placeholder="esim. 3" value="'+(procDraft.cprDefibs===''||procDraft.cprDefibs==null?'':procDraft.cprDefibs)+'">'
     +'<label class="fl">Lopputulos</label><div class="chips" id="pCprOutcome"></div>';
   renderChips(document.getElementById('pCprRole'), CPR_ROLES,
     o=>procDraft.cprRole===o,
@@ -1915,6 +1924,17 @@ function buildProcCpr(){
   renderChips(document.getElementById('pCprRhythm'), CPR_RHYTHMS,
     o=>procDraft.cprRhythm===o,
     v=>{ procDraft.cprRhythm = procDraft.cprRhythm===v?'':v; buildProcCpr(); });
+  renderChips(document.getElementById('pCprIo'), CPR_IO,
+    o=>procDraft.cprIo===o,
+    v=>{ procDraft.cprIo = procDraft.cprIo===v?'':v; buildProcCpr(); },
+    o=>o==='Kyllä'?'#34d399':'#9aa6d4');
+  renderChips(document.getElementById('pCprAirway'), CPR_AIRWAYS,
+    o=>procDraft.cprAirway===o,
+    v=>{ procDraft.cprAirway = procDraft.cprAirway===v?'':v; buildProcCpr(); });
+  document.getElementById('pCprDefibs').oninput=e=>{
+    const n=parseInt(e.target.value,10);
+    procDraft.cprDefibs = isNaN(n)||n<0 ? '' : n;
+  };
   renderChips(document.getElementById('pCprOutcome'), CPR_OUTCOMES,
     o=>procDraft.cprOutcome===o,
     v=>{ procDraft.cprOutcome = procDraft.cprOutcome===v?'':v; buildProcCpr(); }, cprOutcomeColor);
@@ -1966,7 +1986,7 @@ function openProc(id, returnTo){
 }
 function openNewProc(pre, returnTo){
   editingProcId=null; procReturnTo=returnTo;
-  procDraft=Object.assign({id:null, shiftId:null, date:ymd(new Date()), type:'intubaatio', room:'H2', outcome:'', strokeDecision:[], cprRole:'', cprRhythm:'', cprOutcome:'', notes:'', imgs:[]}, pre||{});
+  procDraft=Object.assign({id:null, shiftId:null, date:ymd(new Date()), type:'intubaatio', room:'H2', outcome:'', strokeDecision:[], cprRole:'', cprRhythm:'', cprOutcome:'', cprIo:'', cprAirway:'', cprDefibs:'', notes:'', imgs:[]}, pre||{});
   document.getElementById('procTitle').textContent='Uusi toimenpide';
   document.getElementById('deleteProc').style.display='none';
   fillProcForm(); document.getElementById('procSheet').classList.add('open');
@@ -1983,7 +2003,7 @@ document.getElementById('saveProc').onclick=()=>{
   procDraft.notes=document.getElementById('pNotes').value.trim();
   if(!procTypeById(procDraft.type).cannula) procDraft.outcome='';
   if(procDraft.type!=='stroke') procDraft.strokeDecision=[];
-  if(procDraft.type!=='elvytys'){ procDraft.cprRole=''; procDraft.cprRhythm=''; procDraft.cprOutcome=''; }
+  if(procDraft.type!=='elvytys'){ procDraft.cprRole=''; procDraft.cprRhythm=''; procDraft.cprOutcome=''; procDraft.cprIo=''; procDraft.cprAirway=''; procDraft.cprDefibs=''; }
   if(!procDraft.id){ procDraft.id=rid(); procDraft.created=Date.now(); }
   const ix=procs.findIndex(p=>p.id===procDraft.id);
   if(ix>=0) procs[ix]=procDraft; else procs.push(procDraft);
@@ -2157,6 +2177,29 @@ function renderProcLog(){
       rhythmRows.forEach(x=>{ st+=`<div class="brow"><div class="l1">
         <span class="nm">${esc(x.r)}</span><span class="mt"><b>${x.n}</b> kpl</span></div>
         <div class="bar"><i style="width:${Math.max(3,Math.round(x.n/maxRh*100))}%;background:#fdba74"></i></div></div>`; });
+    }
+    // IO-yhteys & hengitystie
+    const ioN=cprs.filter(p=>p.cprIo==='Kyllä').length;
+    const byAw={}; cprs.forEach(p=>{ if(p.cprAirway) byAw[p.cprAirway]=(byAw[p.cprAirway]||0)+1; });
+    const igelN=(byAw['iGel']||0)+(byAw['Molemmat']||0);
+    const intubN=(byAw['Intubaatio']||0)+(byAw['Molemmat']||0);
+    if(ioN||Object.keys(byAw).length){
+      st+='<div class="miniL" style="margin:12px 2px 2px;">IO-yhteys & hengitystie</div><div style="margin-top:6px">'
+        +(ioN?`<span class="chipstat">IO-yhteys <b>×${ioN}</b></span>`:'')
+        +(igelN?`<span class="chipstat">iGel <b>×${igelN}</b></span>`:'')
+        +(intubN?`<span class="chipstat">Intubaatio <b>×${intubN}</b></span>`:'')
+        +(byAw['Molemmat']?`<span class="chipstat">Molemmat <b>×${byAw['Molemmat']}</b></span>`:'')
+        +'</div>';
+    }
+    // defibrillaatiot
+    const defs=cprs.filter(p=>p.cprDefibs!==''&&p.cprDefibs!=null).map(p=>+p.cprDefibs);
+    if(defs.length){
+      const defSum=defs.reduce((a,b)=>a+b,0);
+      st+='<div class="miniL" style="margin:12px 2px 2px;">Defibrillaatiot</div><div class="tilegrid" style="margin-top:6px;">'
+        + tile(defSum,'Yhteensä')
+        + tile(dec1(defSum/defs.length),'Ø / elvytys')
+        + tile(Math.max.apply(null,defs),'Enimmillään')
+        + '</div>';
     }
   }
 
