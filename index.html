@@ -585,14 +585,21 @@ function lsSet(k,v){
   try{ localStorage.setItem(k, v); return true; }
   catch(e){ alert('Tallennustila on täynnä. Poista kuvia tai vanhoja kirjauksia ja yritä uudelleen.'); return false; }
 }
+/* Turvallinen luku: rikkinäinen data otetaan talteen eikä kaadeta sovellusta */
+function loadJSON(k){
+  const raw=localStorage.getItem(k);
+  if(!raw) return [];
+  try{ const v=JSON.parse(raw); return Array.isArray(v)?v:[]; }
+  catch(e){ try{ localStorage.setItem(k+'_corrupt', raw); }catch(_){} return []; }
+}
 const LS_SHIFTS='tv_shifts2';
-let shifts = JSON.parse(localStorage.getItem(LS_SHIFTS)||'[]');
+let shifts = loadJSON(LS_SHIFTS);
 function saveShifts(){ lsSet(LS_SHIFTS, JSON.stringify(shifts)); }
 function rid(){ return Math.random().toString(36).slice(2,9); }
 
 /* ---------- Traumapotilaat ---------- */
 const LS_TRAUMAS='tv_traumas';
-let traumas = JSON.parse(localStorage.getItem(LS_TRAUMAS)||'[]');
+let traumas = loadJSON(LS_TRAUMAS);
 function saveTraumas(){ lsSet(LS_TRAUMAS, JSON.stringify(traumas)); }
 
 const TRAUMA_TYPES=[
@@ -630,19 +637,20 @@ function canonRole(s){
   if(/amb/i.test(s)) return 'AMBreboa';
   return '';
 }
-/* Normalisoi aiemmin tallennetut roolit kanonisiksi */
-(function migrateTraumaRoles(){
+/* Normalisoi aiemmin tallennetut roolit kanonisiksi (ajetaan myös tuonnin jälkeen) */
+function migrateTraumaRoles(){
   let changed=false;
   traumas.forEach(t=>{ const c=canonRole(t.role); if(c!==(t.role||'')){ t.role=c; changed=true; } });
   if(changed) saveTraumas();
-})();
+}
+migrateTraumaRoles();
 
 /* ---------- Toimenpiteet & hälytykset ---------- */
 const LS_PROCS='tv_procs';
-let procs = JSON.parse(localStorage.getItem(LS_PROCS)||'[]');
+let procs = loadJSON(LS_PROCS);
 function saveProcs(){ lsSet(LS_PROCS, JSON.stringify(procs)); }
-/* Migraatio: vanhat elvytyksen lopputulokset uusiin sanamuotoihin */
-(function migrateCprOutcomes(){
+/* Migraatio: vanhat elvytyksen arvot uusiin (ajetaan myös tuonnin jälkeen) */
+function migrateCprOutcomes(){
   let changed=false;
   procs.forEach(p=>{
     if(p.cprOutcome==='ROSC'){ p.cprOutcome='ROSC saavutettu'; changed=true; }
@@ -650,7 +658,8 @@ function saveProcs(){ lsSet(LS_PROCS, JSON.stringify(procs)); }
     if(p.cprRole==='Painelija 1'||p.cprRole==='Painelija 2'){ p.cprRole='Painelija'; changed=true; }
   });
   if(changed) saveProcs();
-})();
+}
+migrateCprOutcomes();
 
 /* Meilahden päivystyksessä mahdollisia tilanteita — voi tapahtua missä huoneessa tahansa */
 const PROC_TYPES=[
@@ -731,7 +740,7 @@ function isWeekend(dateStr){ const g=new Date(dateStr+'T12:00').getDay(); return
 function toMin(t){ const p=t.split(':').map(Number); return p[0]*60+p[1]; }
 function dur(s,e){ let d=toMin(e)-toMin(s); if(d<=0) d+=1440; return d; }
 function fmtH(min){ return (Math.round(min/60*100)/100).toString().replace('.',',')+' h'; }
-function ymd(d){ return d.toISOString().slice(0,10); }
+function ymd(d){ return d.getFullYear()+'-'+pad2(d.getMonth()+1)+'-'+pad2(d.getDate()); }
 function esc(s){ return (s||'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
 function pad2(n){ return ('0'+n).slice(-2); }
 function normTime(t){ t=t.replace('.',':'); const p=t.split(':'); return pad2(p[0])+':'+p[1]; }
@@ -741,7 +750,7 @@ let viewYear, viewMonth;
 
 /* ---------- Lista ---------- */
 function renderShiftCard(s, list, marks){
-  const t=typeByCode(s.code);
+  const t=typeByCode(s.code)||{name:s.code,color:'#cbd5e1'};
   const d=new Date(s.date+'T12:00');
   const dayLbl=DAYS[d.getDay()]+' '+d.getDate()+'.'+(d.getMonth()+1)+'.'+d.getFullYear();
   const codeShown=(s.weCode && isWeekend(s.date) && t.we)? t.we.code : s.code;
@@ -844,6 +853,9 @@ function nextShift(){
 /* ---------- Roolitilastot ---------- */
 let statsScope='month';
 function renderStats(){
+  const nowSt=new Date();
+  document.getElementById('scMonth').textContent =
+    (viewYear===nowSt.getFullYear() && viewMonth===nowSt.getMonth()) ? 'Tämä kuukausi' : MONTHS[viewMonth]+' '+viewYear;
   document.getElementById('scMonth').classList.toggle('on', statsScope==='month');
   document.getElementById('scAll').classList.toggle('on', statsScope==='all');
   const src0 = statsScope==='month'
@@ -898,7 +910,7 @@ function renderStats(){
   }
   const pct=m=>totalMin?Math.round(m/totalMin*100):0;
   const cnt=o=>Object.keys(o).length;
-  const tile=(v,k)=>`<div class="tile"><div class="v">${v}</div><div class="k">${k}</div></div>`;
+  const tile=tileHTML;
 
   /* --- rakenna --- */
   let h='<div class="tilegrid">'
@@ -925,7 +937,7 @@ function renderStats(){
   const maxT=Math.max.apply(null,tRows.map(r=>r.min));
   h+='<div class="s-section">Vuorotyypit</div>';
   tRows.forEach(r=>{
-    const t=typeByCode(r.c);
+    const t=typeByCode(r.c)||{name:r.c,color:'#cbd5e1'};
     h+=`<div class="brow"><div class="l1">
       <span class="codepill" style="background:${t.color}">${r.c}</span>
       <span class="nm">${t.name}</span>
@@ -968,7 +980,7 @@ function renderStats(){
       pairs[k]=(pairs[k]||0)+1; fromCnt[fl]=(fromCnt[fl]||0)+1; toCnt[tl]=(toCnt[tl]||0)+1;
     });
     h+=`<div class="s-section">Sijoitusmuutokset ennen vuoroa</div>`;
-    h+=`<div class="hint" style="margin-top:0 0 6px">Sijoitus vaihtui <b>${relocs.length}</b> kertaa ennen vuoron alkua.</div>`;
+    h+=`<div class="hint" style="margin:0 0 6px">Sijoitus vaihtui <b>${relocs.length}</b> kertaa ennen vuoron alkua.</div>`;
     const prs=Object.keys(pairs).sort((a,b)=>pairs[b]-pairs[a]);
     const maxP=Math.max.apply(null,prs.map(k=>pairs[k]));
     prs.forEach(k=>{
@@ -1144,7 +1156,8 @@ document.getElementById('relocFromCustom').oninput=e=>{ draft.preChange.fromCust
 document.getElementById('relocToCustom').oninput=e=>{ draft.preChange.toCustom=e.target.value; };
 
 function openShift(id){
-  editingId=id; draft=JSON.parse(JSON.stringify(shifts.find(x=>x.id===id)));
+  const src=shifts.find(x=>x.id===id); if(!src) return;
+  editingId=id; draft=JSON.parse(JSON.stringify(src));
   document.getElementById('sheetTitle').textContent='Muokkaa vuoroa';
   document.getElementById('deleteShift').style.display='block';
   document.getElementById('fDate').value=draft.date;
@@ -1168,7 +1181,10 @@ document.getElementById('addBtn').onclick=openNew;
 document.getElementById('cancelShift').onclick=closeShift;
 document.getElementById('saveShift').onclick=()=>{
   syncMeta();
-  for(const s of draft.segments){ if(s.loc==='Muu' && !s.custom.trim()){ alert('Kirjoita rooli "Muu"-osiolle tai valitse sijainti.'); return; } }
+  for(const s of draft.segments){
+    if(s.loc==='Muu' && !s.custom.trim()){ alert('Kirjoita rooli "Muu"-osiolle tai valitse sijainti.'); return; }
+    if(s.start===s.end){ alert('Osion alku- ja loppuaika ovat samat — korjaa ajat.'); return; }
+  }
   const rec={id:editingId||draft.id||rid(), date:draft.date, code:draft.code, weCode:draft.weCode, start:draft.start, end:draft.end,
     segments:draft.segments.map(s=>({start:s.start,end:s.end,loc:s.loc,vastaava:s.vastaava,suffix:s.suffix,rh:s.rh,custom:s.custom}))};
   if(draft.preChange){
@@ -1177,11 +1193,29 @@ document.getElementById('saveShift').onclick=()=>{
       fromCustom:pc.from==='Muu'?(pc.fromCustom||'').trim():'',
       toCustom:pc.to==='Muu'?(pc.toCustom||'').trim():''};
   }
-  if(editingId){ shifts[shifts.findIndex(x=>x.id===editingId)]=rec; } else shifts.push(rec);
+  /* jos päivämäärä muuttui, siirrä vuoroon liitetyt kirjaukset mukana */
+  const old=shifts.find(x=>x.id===rec.id);
+  if(old && old.date!==rec.date){
+    let tCh=false, pCh=false;
+    traumas.forEach(t=>{ if(t.shiftId===rec.id && t.date===old.date){ t.date=rec.date; tCh=true; } });
+    procs.forEach(p=>{ if(p.shiftId===rec.id && p.date===old.date){ p.date=rec.date; pCh=true; } });
+    if(tCh) saveTraumas(); if(pCh) saveProcs();
+  }
+  const ix=shifts.findIndex(x=>x.id===rec.id);
+  if(ix>=0) shifts[ix]=rec; else shifts.push(rec);
   saveShifts(); closeShift();
   const d=new Date(rec.date+'T12:00'); viewYear=d.getFullYear(); viewMonth=d.getMonth(); render();
 };
-document.getElementById('deleteShift').onclick=()=>{ if(confirm('Poistetaanko tämä vuoro?')){ shifts=shifts.filter(x=>x.id!==editingId); saveShifts(); closeShift(); render(); } };
+document.getElementById('deleteShift').onclick=()=>{
+  if(!confirm('Poistetaanko tämä vuoro?')) return;
+  shifts=shifts.filter(x=>x.id!==editingId);
+  /* irrota poistettuun vuoroon liitetyt kirjaukset (säilyvät päiväkirjassa) */
+  let tCh=false, pCh=false;
+  traumas.forEach(t=>{ if(t.shiftId===editingId){ t.shiftId=null; tCh=true; } });
+  procs.forEach(p=>{ if(p.shiftId===editingId){ p.shiftId=null; pCh=true; } });
+  if(tCh) saveTraumas(); if(pCh) saveProcs();
+  saveShifts(); closeShift(); render();
+};
 
 document.getElementById('prevM').onclick=()=>{ if(--viewMonth<0){viewMonth=11;viewYear--;} render(); };
 document.getElementById('nextM').onclick=()=>{ if(++viewMonth>11){viewMonth=0;viewYear++;} render(); };
@@ -1222,8 +1256,8 @@ function restoreJSON(obj){
   if(!obj || !Array.isArray(obj.shifts)) throw new Error('bad');
   if(!confirm('Korvataanko nykyiset vuorot varmuuskopiolla ('+obj.shifts.length+' vuoroa)?')) return null;
   shifts=obj.shifts.map(migrateShift); saveShifts();
-  if(Array.isArray(obj.traumas)){ traumas=obj.traumas; saveTraumas(); }
-  if(Array.isArray(obj.procs)){ procs=obj.procs; saveProcs(); }
+  if(Array.isArray(obj.traumas)){ traumas=obj.traumas; saveTraumas(); migrateTraumaRoles(); }
+  if(Array.isArray(obj.procs)){ procs=obj.procs; saveProcs(); migrateCprOutcomes(); }
   render();
   return obj.shifts.length;
 }
@@ -1255,7 +1289,7 @@ function importLines(text){
       });
     }
     if(!segments.length){ errors.push('Rivi '+(idx+1)+': ei osioita'); return; }
-    const rec={id:rid(),date,code:t.code,weCode:!!t.we,start:segments[0].start,end:segments[segments.length-1].end,segments};
+    const rec={id:rid(),date,code:t.code,weCode:!!we,start:segments[0].start,end:segments[segments.length-1].end,segments};
     const ex=shifts.findIndex(x=>x.date===date);
     if(ex>=0){ rec.id=shifts[ex].id; shifts[ex]=rec; replaced++; } else { shifts.push(rec); added++; }
   });
@@ -1412,8 +1446,9 @@ function fillTraumaForm(){
   buildTraumaTypeGrid(); buildTraumaRoleChips(); buildTraumaExtra(); buildTraumaImgs();
 }
 function openTrauma(id, returnTo){
+  const src=traumas.find(t=>t.id===id); if(!src) return;
   editingTraumaId=id; traumaReturnTo=returnTo;
-  traumaDraft=JSON.parse(JSON.stringify(traumas.find(t=>t.id===id)));
+  traumaDraft=JSON.parse(JSON.stringify(src));
   document.getElementById('traumaTitle').textContent='Muokkaa potilasta';
   document.getElementById('deleteTrauma').style.display='block';
   fillTraumaForm(); document.getElementById('traumaSheet').classList.add('open');
@@ -1445,8 +1480,9 @@ document.getElementById('saveTrauma').onclick=()=>{
   if(!isTraumaGroup(traumaDraft.type)){ traumaDraft.traumaKind=''; traumaDraft.survived=''; traumaDraft.disposition=[]; traumaDraft.dispositionDetail={}; }
   if(!isRaptorType(traumaDraft.type)) traumaDraft.raptorVenue='';
   if(traumaDraft.dispositionDetail) Object.keys(traumaDraft.dispositionDetail).forEach(k=>{ if(!(traumaDraft.disposition||[]).includes(k)) delete traumaDraft.dispositionDetail[k]; });
-  if(editingTraumaId){ traumas[traumas.findIndex(t=>t.id===editingTraumaId)]=traumaDraft; }
-  else { traumaDraft.id=rid(); traumaDraft.created=Date.now(); traumas.push(traumaDraft); }
+  if(!traumaDraft.id){ traumaDraft.id=rid(); traumaDraft.created=Date.now(); }
+  const ix=traumas.findIndex(t=>t.id===traumaDraft.id);
+  if(ix>=0) traumas[ix]=traumaDraft; else traumas.push(traumaDraft);
   saveTraumas(); closeTrauma();
 };
 document.getElementById('deleteTrauma').onclick=()=>{
@@ -1642,7 +1678,7 @@ function renderPatientLog(){
     list.innerHTML='';
     return;
   }
-  const tile=(v,k)=>`<div class="tile"><div class="v">${v}</div><div class="k">${k}</div></div>`;
+  const tile=tileHTML;
   const counts={}; all.forEach(t=>counts[t.type]=(counts[t.type]||0)+1);
   const grp=g=>TRAUMA_TYPES.filter(t=>t.group===g).reduce((a,t)=>a+(counts[t.id]||0),0);
   const pc=n=>Math.round(n/all.length*100);
@@ -1893,8 +1929,9 @@ function fillProcForm(){
   buildProcTypeGrid(); buildProcOutcome(); buildProcStroke(); buildProcCpr(); buildProcRoomChips(); buildProcImgs();
 }
 function openProc(id, returnTo){
+  const src=procs.find(p=>p.id===id); if(!src) return;
   editingProcId=id; procReturnTo=returnTo;
-  procDraft=JSON.parse(JSON.stringify(procs.find(p=>p.id===id)));
+  procDraft=JSON.parse(JSON.stringify(src));
   document.getElementById('procTitle').textContent='Muokkaa toimenpidettä';
   document.getElementById('deleteProc').style.display='block';
   fillProcForm(); document.getElementById('procSheet').classList.add('open');
@@ -1919,8 +1956,9 @@ document.getElementById('saveProc').onclick=()=>{
   if(!procTypeById(procDraft.type).cannula) procDraft.outcome='';
   if(procDraft.type!=='stroke') procDraft.strokeDecision=[];
   if(procDraft.type!=='elvytys'){ procDraft.cprRole=''; procDraft.cprRhythm=''; procDraft.cprOutcome=''; }
-  if(editingProcId){ procs[procs.findIndex(p=>p.id===editingProcId)]=procDraft; }
-  else { procDraft.id=rid(); procDraft.created=Date.now(); procs.push(procDraft); }
+  if(!procDraft.id){ procDraft.id=rid(); procDraft.created=Date.now(); }
+  const ix=procs.findIndex(p=>p.id===procDraft.id);
+  if(ix>=0) procs[ix]=procDraft; else procs.push(procDraft);
   saveProcs(); closeProc();
 };
 document.getElementById('deleteProc').onclick=()=>{
@@ -1963,7 +2001,7 @@ function renderProcLog(){
     return;
   }
   const counts={}; all.forEach(p=>counts[p.type]=(counts[p.type]||0)+1);
-  const tile=(v,k)=>`<div class="tile"><div class="v">${v}</div><div class="k">${k}</div></div>`;
+  const tile=tileHTML;
   const cans=all.filter(p=>procTypeById(p.type).cannula);
   const oc={}; cans.forEach(p=>oc[p.outcome]=(oc[p.outcome]||0)+1);
   const placed=(oc['ua_tarvittu']||0)+(oc['ilman_ua']||0);
@@ -2144,6 +2182,16 @@ document.getElementById('qPatient').onclick=()=>{ qMenu.classList.remove('open')
 document.getElementById('qProc').onclick=()=>{ qMenu.classList.remove('open'); const cs=currentShift();
   const room=(cs&&cs.segments&&cs.segments[0]&&cs.segments[0].loc)||'H2';
   openNewProc(cs?{date:cs.date, shiftId:cs.id, room}:{}, 'home'); };
+
+/* Esc sulkee päällimmäisen paneelin / suurennoksen / pikavalikon */
+document.addEventListener('keydown',e=>{
+  if(e.key!=='Escape') return;
+  const lb=document.getElementById('lightbox');
+  if(lb.classList.contains('open')){ lb.classList.remove('open'); return; }
+  if(qMenu.classList.contains('open')){ qMenu.classList.remove('open'); return; }
+  const open=document.querySelectorAll('.sheet.open');
+  if(open.length) open[open.length-1].classList.remove('open');
+});
 
 /* ---------- Kuvan suurennos ---------- */
 document.getElementById('lightbox').onclick=()=>document.getElementById('lightbox').classList.remove('open');
