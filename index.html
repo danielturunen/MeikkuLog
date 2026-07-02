@@ -1345,11 +1345,12 @@ function traumaRowHTML(t){
       <span class="td">${dl}</span></div>
     ${t.mechanism?`<div class="tmech">${esc(t.mechanism)}</div>`:''}
     ${t.injuries?`<div class="tinj">${esc(t.injuries)}</div>`:''}
-    ${(t.traumaKind||t.survived||t.raptorVenue||(t.disposition&&t.disposition.length))?`<div style="margin-top:5px; display:flex; flex-wrap:wrap; gap:4px;">
+    ${(t.traumaKind||t.survived||t.raptorVenue||(t.disposition&&t.disposition.length)||t.edDischarge)?`<div style="margin-top:5px; display:flex; flex-wrap:wrap; gap:4px;">
       ${t.traumaKind?`<span class="ptag">${esc(t.traumaKind)}</span>`:''}
       ${t.survived?`<span class="ptag" style="background:${t.survived==='Kyllä'?'#34d399':'#f87171'}; color:#06122b; border-color:transparent;">${t.survived==='Kyllä'?'Elossa':'Menehtyi'}</span>`:''}
       ${t.raptorVenue?`<span class="ptag" style="background:#f9a8d4; color:#06122b; border-color:transparent;">Tmp: ${esc(t.raptorVenue)}</span>`:''}
       ${(t.disposition||[]).map(x=>{ const d=(t.dispositionDetail||{})[x]; return `<span class="ptag">${esc(x)}${d?' · '+esc(d):''}</span>`; }).join('')}
+      ${t.edDischarge?`<span class="ptag" style="${t.edDischarge==='Kyllä'?'background:#34d399; color:#06122b; border-color:transparent;':''}">${t.edDischarge==='Kyllä'?'Kotiutui päivystyksestä':'Ei kotiutunut päivystyksestä'}</span>`:''}
     </div>`:''}
     ${t.role?`<div class="tnote">Rooli: ${esc(t.role)}</div>`:''}
     ${t.notes?`<div class="tnote">${esc(t.notes)}</div>`:''}
@@ -1390,7 +1391,8 @@ function buildTraumaExtra(){
     <label class="fl">Jäikö henkiin</label><div class="chips" id="tSurv"></div>
     ${raptor?`<label class="fl">Angio / leikkaus — suorituspaikka</label><div class="chips" id="tVenue"></div>`:''}
     <label class="fl">Jatkohoito</label><div class="chips" id="tDisp"></div>
-    <div id="tDispDetail"></div>`;
+    <div id="tDispDetail"></div>
+    <div id="tEdHome"></div>`;
   if(raptor) renderChips(document.getElementById('tVenue'), RAPTOR_VENUES,
     o=>traumaDraft.raptorVenue===o,
     v=>{ traumaDraft.raptorVenue=(traumaDraft.raptorVenue===v?'':v); buildTraumaExtra(); });
@@ -1416,6 +1418,15 @@ function buildTraumaExtra(){
       o=>(traumaDraft.dispositionDetail||{})[x]===o,
       v=>{ const m=traumaDraft.dispositionDetail||(traumaDraft.dispositionDetail={}); m[x]=(m[x]===v?'':v); buildTraumaExtra(); });
   });
+  /* Päivystyksessä hoidetuille: kotiutuiko suoraan päivystyksestä */
+  const eh=document.getElementById('tEdHome');
+  if((traumaDraft.disposition||[]).includes('Päivystyksessä')){
+    eh.innerHTML='<label class="fl">Kotiutuiko päivystyksestä</label><div class="chips" id="tEdHomeChips"></div>';
+    renderChips(document.getElementById('tEdHomeChips'), ['Kyllä','Ei'],
+      o=>traumaDraft.edDischarge===o,
+      v=>{ traumaDraft.edDischarge=(traumaDraft.edDischarge===v?'':v); buildTraumaExtra(); },
+      o=>o==='Kyllä'?'#34d399':'#f87171');
+  } else eh.innerHTML='';
 }
 function buildTraumaRoleChips(){
   const c=document.getElementById('tRoleChips');
@@ -1456,7 +1467,7 @@ function openTrauma(id, returnTo){
 function openNewTrauma(pre, returnTo){
   editingTraumaId=null; traumaReturnTo=returnTo;
   traumaDraft=Object.assign({id:null, shiftId:null, date:ymd(new Date()), type:'traumahalytys',
-    age:'', mechanism:'', injuries:'', role:'', notes:'', traumaKind:'', survived:'', disposition:[], dispositionDetail:{}, raptorVenue:'', imgs:[]}, pre||{});
+    age:'', mechanism:'', injuries:'', role:'', notes:'', traumaKind:'', survived:'', disposition:[], dispositionDetail:{}, raptorVenue:'', edDischarge:'', imgs:[]}, pre||{});
   document.getElementById('traumaTitle').textContent='Uusi potilas';
   document.getElementById('deleteTrauma').style.display='none';
   fillTraumaForm(); document.getElementById('traumaSheet').classList.add('open');
@@ -1479,6 +1490,7 @@ document.getElementById('saveTrauma').onclick=()=>{
   }
   if(!isTraumaGroup(traumaDraft.type)){ traumaDraft.traumaKind=''; traumaDraft.survived=''; traumaDraft.disposition=[]; traumaDraft.dispositionDetail={}; }
   if(!isRaptorType(traumaDraft.type)) traumaDraft.raptorVenue='';
+  if(!(traumaDraft.disposition||[]).includes('Päivystyksessä')) traumaDraft.edDischarge='';
   if(traumaDraft.dispositionDetail) Object.keys(traumaDraft.dispositionDetail).forEach(k=>{ if(!(traumaDraft.disposition||[]).includes(k)) delete traumaDraft.dispositionDetail[k]; });
   if(!traumaDraft.id){ traumaDraft.id=rid(); traumaDraft.created=Date.now(); }
   const ix=traumas.findIndex(t=>t.id===traumaDraft.id);
@@ -1638,7 +1650,8 @@ function wireRowImgs(container){
 function traumaMatch(t,q){
   const tt=traumaTypeById(t.type);
   return [tt.label, t.age, t.mechanism, t.injuries, t.notes, t.role, t.traumaKind, t.survived, t.raptorVenue,
-    (t.disposition||[]).join(' '), Object.keys(t.dispositionDetail||{}).map(k=>t.dispositionDetail[k]).join(' '), t.date]
+    (t.disposition||[]).join(' '), Object.keys(t.dispositionDetail||{}).map(k=>t.dispositionDetail[k]).join(' '),
+    t.edDischarge==='Kyllä'?'kotiutui päivystyksestä':'', t.date]
     .join(' ').toLowerCase().includes(q);
 }
 function procMatch(p,q){
@@ -1807,6 +1820,15 @@ function renderPatientLog(){
     dRows.forEach(r=>{ st+=`<div class="brow"><div class="l1">
       <span class="nm">${esc(r.x)}</span><span class="mt"><b>${r.n}</b> kpl</span></div>
       <div class="bar"><i style="width:${Math.max(3,Math.round(r.n/maxDp*100))}%;background:#4f8cff"></i></div></div>`; });
+    /* päivystyksessä hoidetut: kotiutuminen */
+    const edHome=alerts.filter(t=>t.edDischarge==='Kyllä').length;
+    const edStay=alerts.filter(t=>t.edDischarge==='Ei').length;
+    if(edHome||edStay){
+      st+='<div style="margin-top:6px">'
+        +`<span class="chipstat">Kotiutui päivystyksestä <b>×${edHome}</b></span>`
+        +(edStay?`<span class="chipstat">Ei kotiutunut <b>×${edStay}</b></span>`:'')
+        +'</div>';
+    }
   }
 
   st+='<div class="s-section">Kirjaukset</div>';
