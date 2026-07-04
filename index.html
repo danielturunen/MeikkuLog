@@ -239,6 +239,23 @@
   .lightbox{position:fixed; inset:0; background:rgba(0,0,0,.93); z-index:60; display:none; align-items:center; justify-content:center; padding:18px;}
   .lightbox.open{display:flex;}
   .lightbox img{max-width:100%; max-height:100%; border-radius:10px;}
+
+  /* Kalenteriruudukko */
+  .calwrap{background:var(--card); border:1px solid var(--line); border-radius:var(--r); padding:10px;}
+  .calhead{display:grid; grid-template-columns:repeat(7,1fr) 34px; gap:4px; margin-bottom:4px;}
+  .calhead span{font-size:10px; color:var(--muted); text-align:center; text-transform:uppercase; letter-spacing:.4px;}
+  .calgrid{display:grid; grid-template-columns:repeat(7,1fr) 34px; gap:4px;}
+  .calday{min-height:54px; background:var(--card2); border:1px solid transparent; border-radius:9px;
+    padding:4px 2px 3px; display:flex; flex-direction:column; align-items:center; gap:3px;}
+  .calday.blank{visibility:hidden;}
+  .calday .dn{font-size:10px; color:var(--muted); line-height:1;}
+  .calday.today{border-color:var(--accent);}
+  .calday.pastd{opacity:.55;}
+  .calday .cb{font-size:12px; font-weight:800; color:#06122b; border-radius:6px; padding:1px 6px; line-height:1.4;}
+  .calday .cd{display:flex; gap:2px; min-height:5px;}
+  .calday .cd i{width:5px; height:5px; border-radius:50%; display:block;}
+  .calday:active{transform:scale(.95);}
+  .calwk{display:grid; place-items:center; font-size:10px; color:var(--muted); font-variant-numeric:tabular-nums;}
 </style>
 </head>
 <body>
@@ -246,9 +263,10 @@
   <header>
     <div style="display:flex; align-items:center; gap:10px;"><img src="icon-192.png" width="34" height="34" alt="" style="flex:none;border-radius:9px"><h1>MeikkuLog</h1></div>
     <div style="display:flex; gap:8px;">
+      <button class="iconbtn" id="viewBtn" title="Lista / kalenteri">🗓️</button>
       <button class="iconbtn" id="logBtn" title="Hätätilapotilaat">🩸</button>
       <button class="iconbtn" id="importBtn" title="Tuo / palauta">⤒</button>
-      <button class="iconbtn" id="exportBtn" title="Varmuuskopio">⤓</button>
+      <button class="iconbtn" id="exportBtn" title="Vie tiedot">⤓</button>
     </div>
   </header>
 
@@ -270,6 +288,7 @@
   <div class="stats">
     <div class="stat"><div class="num" id="stCount">0</div><div class="lbl">Vuoroa</div></div>
     <div class="stat"><div class="num" id="stHours">0 h</div><div class="lbl">Tunteja</div></div>
+    <div class="stat tap" id="stLogs"><div class="num" id="stLogCount">0</div><div class="lbl">Kirjausta</div></div>
     <div class="stat tap" id="stRoles"><div class="num">Σ</div><div class="lbl">Roolit →</div></div>
   </div>
 
@@ -330,6 +349,24 @@
   </div>
 </div>
 
+<!-- Vienti -->
+<div class="sheet" id="exportSheet">
+  <div class="panel">
+    <div class="grab"></div>
+    <h2>Vie tiedot</h2>
+    <button class="btn primary" id="expJson">📦 JSON-varmuuskopio</button>
+    <label class="fl">Excel / taulukot (CSV)</label>
+    <button class="btn ghost" id="expCsvShifts">Vuorot (CSV)</button>
+    <button class="btn ghost" id="expCsvPatients">Potilaat (CSV)</button>
+    <button class="btn ghost" id="expCsvProcs">Toimenpiteet (CSV)</button>
+    <label class="fl">Kalenteri</label>
+    <button class="btn ghost" id="expIcs">Vuorot kalenteriin (.ics)</button>
+    <p class="hint">JSON on ainoa muoto, josta tiedot voi palauttaa sovellukseen — ota se talteen säännöllisesti.
+      CSV:t aukeavat Excelissä ja Numbersissa. .ics-tiedoston voi avata puhelimella, jolloin vuorot voi lisätä kalenteriin.</p>
+    <button class="btn ghost" id="closeExport">Sulje</button>
+  </div>
+</div>
+
 <!-- Roolitilastot -->
 <div class="sheet" id="statsSheet">
   <div class="panel">
@@ -337,6 +374,7 @@
     <h2>Roolitilastot</h2>
     <div class="scopebar">
       <button class="scope on" id="scMonth">Tämä kuukausi</button>
+      <button class="scope" id="scYear">Vuosi</button>
       <button class="scope" id="scAll">Kaikki</button>
     </div>
     <div id="statsList"></div>
@@ -796,18 +834,28 @@ function renderShiftCard(s, list, marks){
   wrap.appendChild(card); list.appendChild(wrap);
 }
 
+const LS_VIEW='tv_view';
+let viewMode=localStorage.getItem(LS_VIEW)==='grid'?'grid':'list';
+
 function render(){
   document.getElementById('monthLabel').textContent = MONTHS[viewMonth]+' '+viewYear;
   const now=new Date();
   document.getElementById('todayBtn').style.display =
     (viewYear===now.getFullYear() && viewMonth===now.getMonth()) ? 'none' : '';
+  document.getElementById('viewBtn').textContent = viewMode==='grid' ? '📋' : '🗓️';
   updateBackupBanner();
-  const inMonth = shifts.filter(s=>{ const d=new Date(s.date+'T12:00'); return d.getFullYear()===viewYear && d.getMonth()===viewMonth; })
-                        .sort((a,b)=> a.date<b.date?-1:a.date>b.date?1:0);
+  const inYM = d => { const x=new Date(d+'T12:00'); return x.getFullYear()===viewYear && x.getMonth()===viewMonth; };
+  const inMonth = shifts.filter(s=>inYM(s.date)).sort((a,b)=> a.date<b.date?-1:a.date>b.date?1:0);
   let totalMin=0; inMonth.forEach(s=> s.segments.forEach(seg=> totalMin+=dur(seg.start,seg.end)));
   document.getElementById('stCount').textContent = inMonth.length;
   document.getElementById('stHours').textContent = fmtH(totalMin);
+  document.getElementById('stLogCount').textContent =
+    traumas.filter(t=>inYM(t.date)).length + procs.filter(p=>inYM(p.date)).length;
+  if(viewMode==='grid') renderCalGrid(inMonth); else renderListView(inMonth);
+}
 
+function renderListView(inMonth){
+  const now=new Date();
   const list=document.getElementById('list');
   const viewingCurrentMonth = (viewYear===now.getFullYear() && viewMonth===now.getMonth());
   const gNext = nextShift();
@@ -836,6 +884,65 @@ function render(){
     past.slice().reverse().forEach(s=>renderShiftCard(s, list, marks));
   }
 }
+
+/* Kalenteriruudukko: kuukausi kerralla, viikkotunnit oikealla */
+function renderCalGrid(inMonth){
+  const list=document.getElementById('list');
+  const now=new Date(); const todayStr=ymd(now);
+  const byDate={}; inMonth.forEach(s=>{ (byDate[s.date]||(byDate[s.date]=[])).push(s); });
+  const logDates={};
+  traumas.forEach(t=>{ logDates[t.date]=logDates[t.date]||{}; logDates[t.date].t=1; });
+  procs.forEach(p=>{ logDates[p.date]=logDates[p.date]||{}; logDates[p.date].p=1; });
+  const first=new Date(viewYear,viewMonth,1);
+  const daysInM=new Date(viewYear,viewMonth+1,0).getDate();
+  const lead=(first.getDay()+6)%7; /* ma=0 */
+  const DL=['Ma','Ti','Ke','To','Pe','La','Su'];
+  let h='<div class="calwrap"><div class="calhead">'+DL.map(d=>`<span>${d}</span>`).join('')+'<span>h</span></div><div class="calgrid">';
+  let cell=0, weekMin=0;
+  const cells=lead+daysInM, rows=Math.ceil(cells/7)*7;
+  for(let i=0;i<rows;i++){
+    if(i<lead || i>=lead+daysInM){ h+='<div class="calday blank"></div>'; }
+    else{
+      const day=i-lead+1;
+      const ds=viewYear+'-'+pad2(viewMonth+1)+'-'+pad2(day);
+      const ss=byDate[ds]||[];
+      ss.forEach(s=>s.segments.forEach(seg=>weekMin+=dur(seg.start,seg.end)));
+      const s0=ss[0];
+      const t=s0?(typeByCode(s0.code)||{color:'#cbd5e1'}):null;
+      const codeShown=s0?((s0.weCode && isWeekend(s0.date) && t.we)?t.we.code:s0.code):'';
+      const past=s0&&ss.every(shiftIsPast);
+      const ld=logDates[ds]||{};
+      h+=`<div class="calday${ds===todayStr?' today':''}${past?' pastd':''}" data-d="${ds}"${s0?` data-sid="${s0.id}"`:''}>
+        <span class="dn">${day}</span>
+        ${s0?`<span class="cb" style="background:${t.color}">${esc(codeShown)}${ss.length>1?'+':''}</span>`:''}
+        <span class="cd">${ld.t?'<i style="background:#f87171"></i>':''}${ld.p?'<i style="background:#67e8f9"></i>':''}</span>
+      </div>`;
+    }
+    cell++;
+    if(cell===7){ h+=`<div class="calwk">${weekMin?Math.round(weekMin/60):''}</div>`; cell=0; weekMin=0; }
+  }
+  h+='</div></div>';
+  h+='<div class="hint" style="margin-top:8px;"><span style="color:#f87171;">●</span> potilaskirjaus · <span style="color:#67e8f9;">●</span> toimenpide · napauta päivää avataksesi tai lisätäksesi vuoron</div>';
+  list.innerHTML=h;
+  /* nykyinen/seuraava vuoro kortiksi ruudukon alle */
+  const cur=currentShift(); const gNext=nextShift();
+  const marks={curId:cur?cur.id:null, nextId:gNext?gNext.id:null};
+  const show=cur||gNext;
+  if(show){
+    const sep=document.createElement('div'); sep.className='daylabel';
+    sep.textContent=cur?'Meneillään':'Seuraava vuoro';
+    list.appendChild(sep);
+    renderShiftCard(show, list, marks);
+  }
+  list.querySelectorAll('.calday:not(.blank)').forEach(el=>el.onclick=()=>{
+    if(el.dataset.sid) openShift(el.dataset.sid);
+    else openNew(el.dataset.d);
+  });
+}
+document.getElementById('viewBtn').onclick=()=>{
+  viewMode = viewMode==='grid' ? 'list' : 'grid';
+  lsSet(LS_VIEW, viewMode); render();
+};
 
 function shiftRealEnd(s){
   const t=typeByCode(s.code);
@@ -868,9 +975,13 @@ function renderStats(){
   document.getElementById('scMonth').textContent =
     (viewYear===nowSt.getFullYear() && viewMonth===nowSt.getMonth()) ? 'Tämä kuukausi' : MONTHS[viewMonth]+' '+viewYear;
   document.getElementById('scMonth').classList.toggle('on', statsScope==='month');
+  document.getElementById('scYear').textContent=String(viewYear);
+  document.getElementById('scYear').classList.toggle('on', statsScope==='year');
   document.getElementById('scAll').classList.toggle('on', statsScope==='all');
   const src0 = statsScope==='month'
     ? shifts.filter(s=>{ const d=new Date(s.date+'T12:00'); return d.getFullYear()===viewYear && d.getMonth()===viewMonth; })
+    : statsScope==='year'
+    ? shifts.filter(s=>{ const d=new Date(s.date+'T12:00'); return d.getFullYear()===viewYear; })
     : shifts.slice();
   /* vain roolitetut mukaan: ?-osiot pois, kokonaan roolittamattomat vuorot ohitetaan */
   const marked=seg=>!(seg.loc==='Muu' && (!seg.custom || seg.custom.trim()==='' || seg.custom.trim()==='?'));
@@ -1025,8 +1136,8 @@ function renderStats(){
     + dowMin.map((m,i)=>`<div class="vcol"><span class="dv">${m?Math.round(m/60):''}</span><span class="db" style="height:${Math.round(m/maxD*72)}px"></span><span class="dl">${DL[i]}</span></div>`).join('')
     + '</div>';
 
-  /* kuukausitrendi koko historiasta */
-  if(statsScope==='all'){
+  /* kuukausitrendi (vuosi- ja kaikki-näkymissä) */
+  if(statsScope!=='month'){
     const byM={};
     src.forEach(s=>{ const k=s.date.slice(0,7); byM[k]=(byM[k]||0)+s.segments.reduce((a,x)=>a+dur(x.start,x.end),0); });
     const keys=Object.keys(byM).sort().slice(-12);
@@ -1042,6 +1153,7 @@ function renderStats(){
 }
 document.getElementById('stRoles').onclick=()=>{ renderStats(); document.getElementById('statsSheet').classList.add('open'); };
 document.getElementById('scMonth').onclick=()=>{ statsScope='month'; renderStats(); };
+document.getElementById('scYear').onclick=()=>{ statsScope='year'; renderStats(); };
 document.getElementById('scAll').onclick=()=>{ statsScope='all'; renderStats(); };
 document.getElementById('closeStats').onclick=()=>document.getElementById('statsSheet').classList.remove('open');
 
@@ -1175,8 +1287,8 @@ function openShift(id){
   buildTypeGrid(); buildSegs(); buildReloc(); buildTraumaSection(); buildProcSection();
   document.getElementById('shiftSheet').classList.add('open');
 }
-function openNew(){
-  editingId=null; const today=ymd(new Date());
+function openNew(dateStr){
+  editingId=null; const today=dateStr||ymd(new Date());
   draft={id:rid(), date:today, code:'A', weCode:false, segments:[], start:'', end:'', preChange:null};
   document.getElementById('sheetTitle').textContent='Lisää vuoro';
   document.getElementById('deleteShift').style.display='none';
@@ -1188,7 +1300,7 @@ function closeShift(){ document.getElementById('shiftSheet').classList.remove('o
 
 document.getElementById('fDate').onchange=e=>{ draft.date=e.target.value; selectType(draft.code); };
 document.getElementById('addSegBtn').onclick=addSeg;
-document.getElementById('addBtn').onclick=openNew;
+document.getElementById('addBtn').onclick=()=>openNew();
 document.getElementById('cancelShift').onclick=closeShift;
 document.getElementById('saveShift').onclick=()=>{
   syncMeta();
@@ -1231,6 +1343,28 @@ document.getElementById('deleteShift').onclick=()=>{
 document.getElementById('prevM').onclick=()=>{ if(--viewMonth<0){viewMonth=11;viewYear--;} render(); };
 document.getElementById('nextM').onclick=()=>{ if(++viewMonth>11){viewMonth=0;viewYear++;} render(); };
 
+/* Pyyhkäisy vasemmalle/oikealle vaihtaa kuukautta (vain päänäkymässä) */
+let swX=null, swY=null;
+document.addEventListener('touchstart',e=>{
+  if(document.querySelector('.sheet.open')||document.querySelector('.lightbox.open')){ swX=null; return; }
+  swX=e.touches[0].clientX; swY=e.touches[0].clientY;
+},{passive:true});
+document.addEventListener('touchend',e=>{
+  if(swX==null) return;
+  const dx=e.changedTouches[0].clientX-swX, dy=e.changedTouches[0].clientY-swY; swX=null;
+  if(Math.abs(dx)>70 && Math.abs(dx)>2.2*Math.abs(dy)){
+    if(dx<0) document.getElementById('nextM').click(); else document.getElementById('prevM').click();
+  }
+},{passive:true});
+
+/* Kirjaukset-laatta avaa lokin katsottuun kuukauteen */
+document.getElementById('stLogs').onclick=()=>{
+  logYear=viewYear; logMonth=viewMonth;
+  logSearch=''; document.getElementById('logSearch').value='';
+  setLogScope('month');
+  document.getElementById('logSheet').classList.add('open');
+};
+
 /* ---------- Vienti ---------- */
 const LS_BACKUP='tv_lastBackup', LS_BSNOOZE='tv_backupSnooze', LS_FIRST='tv_firstUse';
 function daysSince(iso){ if(!iso) return Infinity; const t=new Date(iso).getTime(); if(isNaN(t)) return Infinity; return (Date.now()-t)/86400000; }
@@ -1243,14 +1377,83 @@ function updateBackupBanner(){
     && daysSince(localStorage.getItem(LS_BSNOOZE))>7;
   el.style.display = show ? 'flex' : 'none';
 }
-function doExport(){
-  const blob=new Blob([JSON.stringify({shifts,traumas,procs,exported:new Date().toISOString()},null,2)],{type:'application/json'});
+/* Tiedoston toimitus: mobiilissa jakovalikko (Tallenna tiedostoihin ym.), muuten lataus */
+async function deliverFile(name, mime, content){
+  try{
+    const file=new File([content], name, {type:mime});
+    if(navigator.canShare && navigator.canShare({files:[file]})){
+      await navigator.share({files:[file]});
+      return true;
+    }
+  }catch(e){ if(e && e.name==='AbortError') return false; }
+  const blob=new Blob([content],{type:mime});
   const url=URL.createObjectURL(blob); const a=document.createElement('a');
-  a.href=url; a.download='meikkulog-varmuuskopio.json'; a.click(); setTimeout(()=>URL.revokeObjectURL(url),1000);
-  lsSet(LS_BACKUP, new Date().toISOString()); updateBackupBanner();
+  a.href=url; a.download=name; a.click(); setTimeout(()=>URL.revokeObjectURL(url),1000);
+  return true;
 }
-document.getElementById('exportBtn').onclick=doExport;
+async function doExport(){
+  const ok=await deliverFile('meikkulog-varmuuskopio.json','application/json',
+    JSON.stringify({shifts,traumas,procs,exported:new Date().toISOString()},null,2));
+  if(ok){ lsSet(LS_BACKUP, new Date().toISOString()); updateBackupBanner(); }
+}
+document.getElementById('exportBtn').onclick=()=>document.getElementById('exportSheet').classList.add('open');
+document.getElementById('closeExport').onclick=()=>document.getElementById('exportSheet').classList.remove('open');
+document.getElementById('expJson').onclick=doExport;
 document.getElementById('backupNow').onclick=doExport;
+
+/* CSV-vienti (puolipiste-erotin + BOM suomalaista Exceliä varten) */
+function csvEsc(v){ v=(v==null?'':String(v)); return /[";\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v; }
+function toCSV(rows){ return '\ufeff'+rows.map(r=>r.map(csvEsc).join(';')).join('\r\n'); }
+function shiftsCSV(){
+  const rows=[['Päivämäärä','Koodi','Vuoro','Alku','Loppu','Tunnit','Osiot/roolit','Sijoitusmuutos']];
+  shifts.slice().sort((a,b)=>a.date<b.date?-1:1).forEach(s=>{
+    const t=typeByCode(s.code)||{name:s.code};
+    const min=s.segments.reduce((a,x)=>a+dur(x.start,x.end),0);
+    const segs=s.segments.map(seg=>seg.start+'-'+seg.end+' '+roleCode(seg)).join(' | ');
+    const pc=s.preChange?(locName(s.preChange.from,s.preChange.fromCustom)+' -> '+locName(s.preChange.to,s.preChange.toCustom)):'';
+    rows.push([s.date,s.code,t.name,s.start,s.end,dec2(min/60),segs,pc]);
+  });
+  return toCSV(rows);
+}
+function patientsCSV(){
+  const rows=[['Päivämäärä','Tyyppi','Ikä/sukupuoli','Vammamekanismi','Vammat','Tylppä/terävä','Jäi henkiin','Jatkohoito','Tarkenteet','Jatko päivystyksestä','Tmp-paikka','Rooli','Lisätiedot']];
+  traumas.slice().sort((a,b)=>a.date<b.date?-1:1).forEach(t=>{
+    const dets=Object.keys(t.dispositionDetail||{}).map(k=>k+': '+t.dispositionDetail[k]).join(' | ');
+    rows.push([t.date,traumaTypeById(t.type).label,t.age||'',t.mechanism||'',t.injuries||'',t.traumaKind||'',t.survived||'',
+      (t.disposition||[]).join(' | '),dets,t.edDischarge||'',t.raptorVenue||'',t.role||'',t.notes||'']);
+  });
+  return toCSV(rows);
+}
+function procsCSV(){
+  const rows=[['Päivämäärä','Tyyppi','Huone','Kanyylin lopputulos','STROKE-päätökset','Elvytysrooli','Alkurytmi','Suoniyhteys','Hengitystie','Defibrillaatiot','Elvytyksen lopputulos','Lisätiedot']];
+  procs.slice().sort((a,b)=>a.date<b.date?-1:1).forEach(p=>{
+    const oc=p.outcome?outcomeById(p.outcome):null;
+    rows.push([p.date,procTypeById(p.type).label,p.room||'',oc?oc.label:'',(p.strokeDecision||[]).join(' | '),
+      p.cprRole||'',p.cprRhythm||'',p.cprAccess||'',p.cprAirway||'',(p.cprDefibs!==''&&p.cprDefibs!=null)?p.cprDefibs:'',p.cprOutcome||'',p.notes||'']);
+  });
+  return toCSV(rows);
+}
+document.getElementById('expCsvShifts').onclick=()=>deliverFile('meikkulog-vuorot.csv','text/csv',shiftsCSV());
+document.getElementById('expCsvPatients').onclick=()=>deliverFile('meikkulog-potilaat.csv','text/csv',patientsCSV());
+document.getElementById('expCsvProcs').onclick=()=>deliverFile('meikkulog-toimenpiteet.csv','text/csv',procsCSV());
+
+/* Vuorot kalenteritiedostoksi (.ics) */
+function icsEsc(s){ return (s||'').replace(/\\/g,'\\\\').replace(/;/g,'\\;').replace(/,/g,'\\,').replace(/\n/g,'\\n'); }
+function icsDate(d){ return d.getFullYear()+pad2(d.getMonth()+1)+pad2(d.getDate())+'T'+pad2(d.getHours())+pad2(d.getMinutes())+'00'; }
+function shiftsICS(){
+  const L=['BEGIN:VCALENDAR','VERSION:2.0','PRODID:-//MeikkuLog//FI','CALSCALE:GREGORIAN','X-WR-CALNAME:MeikkuLog vuorot'];
+  shifts.slice().sort((a,b)=>a.date<b.date?-1:1).forEach(s=>{
+    const t=typeByCode(s.code)||{name:s.code};
+    const roles=s.segments.map(seg=>roleCode(seg)).join(', ');
+    L.push('BEGIN:VEVENT','UID:'+s.id+'@meikkulog',
+      'DTSTART:'+icsDate(shiftStartDate(s)),'DTEND:'+icsDate(shiftRealEnd(s)),
+      'SUMMARY:'+icsEsc('Vuoro '+s.code+' · '+roles),
+      'DESCRIPTION:'+icsEsc(t.name),'END:VEVENT');
+  });
+  L.push('END:VCALENDAR');
+  return L.join('\r\n');
+}
+document.getElementById('expIcs').onclick=()=>deliverFile('meikkulog-vuorot.ics','text/calendar',shiftsICS());
 document.getElementById('backupDismiss').onclick=()=>{ lsSet(LS_BSNOOZE, new Date().toISOString()); updateBackupBanner(); };
 document.getElementById('todayBtn').onclick=()=>{ const n=new Date(); viewYear=n.getFullYear(); viewMonth=n.getMonth(); render(); };
 if(!localStorage.getItem(LS_FIRST)) lsSet(LS_FIRST, new Date().toISOString());
