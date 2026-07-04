@@ -1,13 +1,16 @@
 /* MeikkuLog service worker — offline-tuki.
    Network-first: verkossa saa aina tuoreimman version, offline-tilassa
    palautetaan välimuistista. Sovellus on yhdessä index.html-tiedostossa. */
-const CACHE = 'meikkulog-v2';
+const CACHE = 'meikkulog-v3';
 const CORE = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png', './icon-180.png'];
 
 self.addEventListener('install', e => {
-  e.waitUntil(
-    caches.open(CACHE).then(c => c.addAll(CORE)).then(() => self.skipWaiting())
-  );
+  e.waitUntil(caches.open(CACHE).then(c => c.addAll(CORE)));
+});
+
+/* Sivu pyytää aktivointia kun käyttäjä painaa Päivitä-nappia */
+self.addEventListener('message', e => {
+  if (e.data && e.data.type === 'SKIP_WAITING') self.skipWaiting();
 });
 
 self.addEventListener('activate', e => {

@@ -256,6 +256,17 @@
   .calday .cd i{width:5px; height:5px; border-radius:50%; display:block;}
   .calday:active{transform:scale(.95);}
   .calwk{display:grid; place-items:center; font-size:10px; color:var(--muted); font-variant-numeric:tabular-nums;}
+
+  /* Saavutukset */
+  .achgrid{display:grid; grid-template-columns:repeat(3,1fr); gap:8px;}
+  .ach{background:var(--card); border:1px solid var(--line); border-radius:12px; padding:10px 6px 8px; text-align:center;}
+  .ach .ai{font-size:24px; line-height:1.2;}
+  .ach .an{font-size:10px; font-weight:700; margin-top:4px; line-height:1.25;}
+  .ach .ap{font-size:9px; color:var(--muted); margin-top:3px; font-variant-numeric:tabular-nums;}
+  .ach.on{border-color:var(--accent); box-shadow:0 0 0 1px rgba(79,140,255,.35) inset;}
+  .ach.off{opacity:.5; filter:grayscale(.4);}
+  .ach .abar{height:4px; border-radius:3px; background:var(--card2); overflow:hidden; margin-top:5px;}
+  .ach .abar i{display:block; height:100%; background:var(--accent);}
 </style>
 </head>
 <body>
@@ -269,6 +280,13 @@
       <button class="iconbtn" id="exportBtn" title="Vie tiedot">⤓</button>
     </div>
   </header>
+
+  <div id="updateBanner" class="backupbanner" style="display:none; background:rgba(79,140,255,.12); border-color:rgba(79,140,255,.35);">
+    <span>🔄 Sovelluksesta on uusi versio.</span>
+    <div class="bb-act">
+      <button class="bb-now" id="updateNow">Päivitä</button>
+    </div>
+  </div>
 
   <div id="backupBanner" class="backupbanner" style="display:none;">
     <span>📦 Muista ottaa varmuuskopio — tiedot ovat vain tässä selaimessa.</span>
@@ -968,6 +986,65 @@ function nextShift(){
     .sort((a,b)=>shiftStartDate(a)-shiftStartDate(b))[0] || null;
 }
 
+/* ---------- Saavutukset (lasketaan aina koko historiasta) ---------- */
+function achievementsHTML(){
+  const totH=shifts.reduce((a,s)=>a+shiftMinutes(s),0)/60;
+  const nights=shifts.filter(s=>{ const t=typeByCode(s.code); return t&&t.overnight; }).length;
+  const wes=shifts.filter(s=>isWeekend(s.date)).length;
+  const roomIds=LOCS.filter(l=>l.room).map(l=>l.id);
+  const worked=new Set(); shifts.forEach(s=>(s.segments||[]).forEach(g=>{ if(roomIds.includes(g.loc)) worked.add(g.loc); }));
+  const days=[...new Set(shifts.map(s=>s.date))].sort();
+  let run=days.length?1:0, bestRun=run;
+  for(let i=1;i<days.length;i++){
+    if(new Date(days[i]+'T12:00')-new Date(days[i-1]+'T12:00')===86400000){ run++; if(run>bestRun) bestRun=run; }
+    else run=1;
+  }
+  const mStreak=monthStreak(shifts.concat(traumas).concat(procs));
+  const intub=procs.filter(p=>p.type==='intubaatio').length;
+  const cans=procs.filter(p=>procTypeById(p.type).cannula).length;
+  const rosc=procs.filter(p=>p.type==='elvytys'&&p.cprOutcome==='ROSC saavutettu').length;
+  const traumaN=traumas.length;
+  const alerts=traumas.filter(t=>traumaTypeById(t.type).group==='Trauma').length;
+
+  /* [ikoni, nimi, tavoite, nykyarvo] */
+  const A=[
+    ['🩺','Ensimmäinen vuoro',        1,   shifts.length],
+    ['📅','10 vuoroa',                10,  shifts.length],
+    ['💪','50 vuoroa',                50,  shifts.length],
+    ['🏅','100 vuoroa',               100, shifts.length],
+    ['👑','250 vuoroa',               250, shifts.length],
+    ['⏱️','100 tuntia',               100, totH],
+    ['🔥','500 tuntia',               500, totH],
+    ['🚀','1000 tuntia',              1000,totH],
+    ['🌙','10 yövuoroa',              10,  nights],
+    ['🦉','50 yövuoroa',              50,  nights],
+    ['🎪','20 vkl-vuoroa',            20,  wes],
+    ['🧭','Kaikki sijoitukset',       roomIds.length, worked.size],
+    ['📆','5 päivän putki',           5,   bestRun],
+    ['🗓️','3 kk kirjausputki',        3,   mStreak],
+    ['🏆','12 kk kirjausputki',       12,  mStreak],
+    ['🩸','Ensimmäinen potilas',      1,   traumaN],
+    ['🚑','25 potilasta',             25,  traumaN],
+    ['⛑️','10 traumahälytystä',       10,  alerts],
+    ['💉','Ensimmäinen toimenpide',   1,   procs.length],
+    ['🫁','10 intubaatiota',          10,  intub],
+    ['🎯','25 UÄ-kanyylia',           25,  cans],
+    ['❤️','Ensimmäinen ROSC',         1,   rosc],
+  ];
+  let unlocked=0;
+  const cards=A.map(([ic,nm,need,val])=>{
+    const on=val>=need; if(on) unlocked++;
+    const shown=Math.min(need, Math.floor(val));
+    const pc=Math.min(100, Math.round(val/need*100));
+    return `<div class="ach ${on?'on':'off'}">
+      <div class="ai">${ic}</div>
+      <div class="an">${esc(nm)}</div>
+      ${on?'<div class="ap">✓ Avattu</div>':`<div class="ap">${shown} / ${need}</div><div class="abar"><i style="width:${Math.max(3,pc)}%"></i></div>`}
+    </div>`;
+  }).join('');
+  return {html:`<div class="s-section">Saavutukset (${unlocked}/${A.length})</div><div class="achgrid">${cards}</div>`, unlocked, total:A.length};
+}
+
 /* ---------- Roolitilastot ---------- */
 let statsScope='month';
 function renderStats(){
@@ -1148,6 +1225,9 @@ function renderStats(){
         + '</div>';
     }
   }
+  /* saavutukset — aina koko historiasta jaksosta riippumatta */
+  h+=achievementsHTML().html;
+
   if(skipped) h+=`<div class="hint" style="margin-top:14px;">${skipped} roolittamatonta vuoroa jätetty pois tilastoista — merkkaa roolit niin ne lasketaan mukaan.</div>`;
   el.innerHTML=h;
 }
@@ -2476,9 +2556,33 @@ document.addEventListener('keydown',e=>{
 /* ---------- Kuvan suurennos ---------- */
 document.getElementById('lightbox').onclick=()=>document.getElementById('lightbox').classList.remove('open');
 
-/* ---------- Offline-tuki ---------- */
+/* ---------- Offline-tuki & päivitysbanneri ---------- */
 if('serviceWorker' in navigator){
-  window.addEventListener('load',()=>{ navigator.serviceWorker.register('sw.js').catch(()=>{}); });
+  window.addEventListener('load', async ()=>{
+    try{
+      const reg=await navigator.serviceWorker.register('sw.js');
+      const showUpd=()=>{ const el=document.getElementById('updateBanner'); if(el) el.style.display='flex'; };
+      if(reg.waiting && navigator.serviceWorker.controller) showUpd();
+      reg.addEventListener('updatefound',()=>{
+        const nw=reg.installing; if(!nw) return;
+        nw.addEventListener('statechange',()=>{
+          if(nw.state==='installed' && navigator.serviceWorker.controller) showUpd();
+        });
+      });
+      let reloading=false;
+      document.getElementById('updateNow').onclick=()=>{
+        navigator.serviceWorker.addEventListener('controllerchange',()=>{
+          if(reloading) return; reloading=true; location.reload();
+        });
+        if(reg.waiting) reg.waiting.postMessage({type:'SKIP_WAITING'});
+        else location.reload();
+      };
+      /* tarkista päivitykset kun sovellus palaa etualalle */
+      document.addEventListener('visibilitychange',()=>{
+        if(document.visibilityState==='visible') reg.update().catch(()=>{});
+      });
+    }catch(e){}
+  });
 }
 
 render();
