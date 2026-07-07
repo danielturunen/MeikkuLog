@@ -512,8 +512,10 @@
 
     <div id="pCprWrap" style="display:none;"></div>
 
-    <label class="fl">Huone / sijainti</label>
-    <div class="chips" id="pRoomChips"></div>
+    <div id="pRoomWrap">
+      <label class="fl">Huone / sijainti</label>
+      <div class="chips" id="pRoomChips"></div>
+    </div>
 
     <label class="fl">Lisätiedot (valinnainen)</label>
     <textarea id="pNotes" style="min-height:80px;" placeholder="esim. potilas, indikaatio, kuka intuboi"></textarea>
@@ -724,6 +726,7 @@ migrateCprOutcomes();
 
 /* Meilahden päivystyksessä mahdollisia tilanteita — voi tapahtua missä huoneessa tahansa */
 const PROC_TYPES=[
+  {id:'ua_kanyyli',   label:'UÄ perifeerinen kanyyli', short:'UÄ-kanyyli',color:'#5eead4', cannula:true},
   {id:'intubaatio',   label:'Intubaatio',              short:'Intub.',   color:'#fca5a5'},
   {id:'stroke',       label:'STROKE-hälytys',          short:'STROKE',   color:'#a5b4fc'},
   {id:'elvytys',      label:'Elvytys',                 short:'Elvytys',  color:'#f87171'},
@@ -732,7 +735,6 @@ const PROC_TYPES=[
   {id:'sepsis',       label:'Sepsis-hälytys',          short:'Sepsis',   color:'#fcd34d'},
   {id:'kardioversio', label:'Kardioversio',             short:'Kardiov.', color:'#67e8f9'},
   {id:'tahdistus',    label:'Tahdistus',               short:'Tahdist.', color:'#22d3ee'},
-  {id:'ua_kanyyli',   label:'UÄ perifeerinen kanyyli', short:'UÄ-kanyyli',color:'#5eead4', cannula:true},
   {id:'cvk',          label:'Keskuslaskimokatetri',    short:'CVK',      color:'#c4b5fd'},
   {id:'muu',          label:'Muu toimenpide',          short:'Muu',      color:'#cbd5e1'},
 ];
@@ -792,6 +794,9 @@ function edNextColor(o){ return o==='Kotiutui' ? '#34d399' : '#4f8cff'; }
 function isRaptorType(id){ return id==='raptor_vakaa' || id==='raptor_instabiili'; }
 const STROKE_DECISIONS=['Liuotushoito','Trombektomia (EVT)','Ei liuotushoitoa','Ei trombektomiaa',
   'Seuranta','Vuoto','Ei löydöksiä','Vanha infarkti'];
+/* STROKE:ssä ei huonetta — potilas menee TT:hen, ja jatko määräytyy hoidon mukaan */
+const STROKE_DEST=['H2 (liuotus)','H2 valvonta','Peruskenttä','Angiosali (EVT)'];
+function strokeDestColor(o){ return o==='Peruskenttä' ? '#9aa6d4' : '#a5b4fc'; }
 function isTraumaGroup(typeId){ return traumaTypeById(typeId).group==='Trauma'; }
 /* Yleinen sirupainikeryhmä */
 function renderChips(el, options, isSel, onClick, colorSel){
@@ -1505,10 +1510,10 @@ function patientsCSV(){
   return toCSV(rows);
 }
 function procsCSV(){
-  const rows=[['Päivämäärä','Tyyppi','Huone','Kanyylin lopputulos','STROKE-päätökset','Elvytysrooli','Alkurytmi','Suoniyhteys','Hengitystie','Defibrillaatiot','Elvytyksen lopputulos','Lisätiedot']];
+  const rows=[['Päivämäärä','Tyyppi','Huone','Kanyylin lopputulos','STROKE-päätökset','STROKE jatko','Elvytysrooli','Alkurytmi','Suoniyhteys','Hengitystie','Defibrillaatiot','Elvytyksen lopputulos','Lisätiedot']];
   procs.slice().sort((a,b)=>a.date<b.date?-1:1).forEach(p=>{
     const oc=p.outcome?outcomeById(p.outcome):null;
-    rows.push([p.date,procTypeById(p.type).label,p.room||'',oc?oc.label:'',(p.strokeDecision||[]).join(' | '),
+    rows.push([p.date,procTypeById(p.type).label,p.room||'',oc?oc.label:'',(p.strokeDecision||[]).join(' | '),p.strokeDest||'',
       p.cprRole||'',p.cprRhythm||'',p.cprAccess||'',p.cprAirway||'',(p.cprDefibs!==''&&p.cprDefibs!=null)?p.cprDefibs:'',p.cprOutcome||'',p.notes||'']);
   });
   return toCSV(rows);
@@ -1950,7 +1955,7 @@ function traumaMatch(t,q){
 }
 function procMatch(p,q){
   const pt=procTypeById(p.type); const oc=p.outcome?outcomeById(p.outcome):null;
-  return [pt.label, p.room?procRoomById(p.room).label:'', p.notes, (p.strokeDecision||[]).join(' '), oc?oc.label:'',
+  return [pt.label, p.room?procRoomById(p.room).label:'', p.notes, (p.strokeDecision||[]).join(' '), p.strokeDest||'', oc?oc.label:'',
           p.cprRole||'', p.cprRhythm||'', p.cprOutcome||'', p.cprAccess||'', p.cprAirway||'', p.date]
     .join(' ').toLowerCase().includes(q);
 }
@@ -2156,8 +2161,9 @@ function procRowHTML(p){
       ${p.cprAirway?`<span class="ptag">${p.cprAirway==='Molemmat'?'iGel + intubaatio':esc(p.cprAirway)}</span>`:''}
       ${(p.cprDefibs!==''&&p.cprDefibs!=null)?`<span class="ptag">Deffa ×${p.cprDefibs}</span>`:''}
       ${p.cprOutcome?`<span class="traumatag" style="background:${cprOutcomeColor(p.cprOutcome)}">${esc(p.cprOutcome)}</span>`:''}</div>`:''}
-    ${(p.strokeDecision&&p.strokeDecision.length)?`<div style="margin:3px 0 4px; display:flex; flex-wrap:wrap; gap:4px;">
-      ${p.strokeDecision.map(x=>`<span class="ptag">${esc(x)}</span>`).join('')}</div>`:''}
+    ${((p.strokeDecision&&p.strokeDecision.length)||p.strokeDest)?`<div style="margin:3px 0 4px; display:flex; flex-wrap:wrap; gap:4px; align-items:center;">
+      ${(p.strokeDecision||[]).map(x=>`<span class="ptag">${esc(x)}</span>`).join('')}
+      ${p.strokeDest?`<span class="traumatag" style="background:${strokeDestColor(p.strokeDest)}">${esc(p.strokeDest)}</span>`:''}</div>`:''}
     ${p.notes?`<div class="tinj">${esc(p.notes)}</div>`:''}
     ${(p.imgs&&p.imgs.length)?`<div class="rowimg">${p.imgs.map(s=>`<img src="${s}">`).join('')}</div>`:''}
   </div>`;
@@ -2185,12 +2191,20 @@ function buildProcTypeGrid(){
 }
 function buildProcStroke(){
   const wrap=document.getElementById('pStrokeWrap');
+  /* STROKE:ssä ei kirjata huonetta — potilas menee TT:hen ja jatko määräytyy hoidosta */
+  const roomWrap=document.getElementById('pRoomWrap');
+  if(roomWrap) roomWrap.style.display = procDraft.type==='stroke' ? 'none' : '';
   if(procDraft.type!=='stroke'){ wrap.style.display='none'; wrap.innerHTML=''; return; }
   wrap.style.display='block';
-  wrap.innerHTML='<label class="fl">Hoitopäätös / löydös</label><div class="chips" id="pStroke"></div>';
+  wrap.innerHTML='<label class="fl">Hoitopäätös / löydös</label><div class="chips" id="pStroke"></div>'
+    +'<label class="fl">Jatko TT-kuvasta</label><div class="chips" id="pStrokeDest"></div>';
   renderChips(document.getElementById('pStroke'), STROKE_DECISIONS,
     o=>(procDraft.strokeDecision||[]).includes(o),
     v=>{ const a=procDraft.strokeDecision||(procDraft.strokeDecision=[]); const i=a.indexOf(v); if(i<0)a.push(v); else a.splice(i,1); buildProcStroke(); });
+  renderChips(document.getElementById('pStrokeDest'), STROKE_DEST,
+    o=>procDraft.strokeDest===o,
+    v=>{ procDraft.strokeDest = procDraft.strokeDest===v?'':v; buildProcStroke(); },
+    strokeDestColor);
 }
 function buildProcCpr(){
   const wrap=document.getElementById('pCprWrap');
@@ -2271,7 +2285,7 @@ function openProc(id, returnTo){
 }
 function openNewProc(pre, returnTo){
   editingProcId=null; procReturnTo=returnTo;
-  procDraft=Object.assign({id:null, shiftId:null, date:ymd(new Date()), type:'intubaatio', room:'H2', outcome:'', strokeDecision:[], cprRole:'', cprRhythm:'', cprOutcome:'', cprAccess:'', cprAirway:'', cprDefibs:'', notes:'', imgs:[]}, pre||{});
+  procDraft=Object.assign({id:null, shiftId:null, date:ymd(new Date()), type:'ua_kanyyli', room:'H2', outcome:'ua_tarvittu', strokeDecision:[], strokeDest:'', cprRole:'', cprRhythm:'', cprOutcome:'', cprAccess:'', cprAirway:'', cprDefibs:'', notes:'', imgs:[]}, pre||{});
   document.getElementById('procTitle').textContent='Uusi toimenpide';
   document.getElementById('deleteProc').style.display='none';
   fillProcForm(); document.getElementById('procSheet').classList.add('open');
@@ -2287,7 +2301,8 @@ document.getElementById('saveProc').onclick=()=>{
   procDraft.date=document.getElementById('pDate').value||procDraft.date;
   procDraft.notes=document.getElementById('pNotes').value.trim();
   if(!procTypeById(procDraft.type).cannula) procDraft.outcome='';
-  if(procDraft.type!=='stroke') procDraft.strokeDecision=[];
+  if(procDraft.type!=='stroke'){ procDraft.strokeDecision=[]; procDraft.strokeDest=''; }
+  else procDraft.room=''; /* STROKE:ssä ei huonetta */
   if(procDraft.type!=='elvytys'){ procDraft.cprRole=''; procDraft.cprRhythm=''; procDraft.cprOutcome=''; procDraft.cprAccess=''; procDraft.cprAirway=''; procDraft.cprDefibs=''; }
   if(!procDraft.id){ procDraft.id=rid(); procDraft.created=Date.now(); }
   const ix=procs.findIndex(p=>p.id===procDraft.id);
@@ -2379,7 +2394,7 @@ function renderProcLog(){
   st+='<div class="s-section">Toimenpiteet viikonpäivittäin</div>'+weekdayChart(all,'#67e8f9');
 
   /* huoneittain */
-  const byRoom={}; all.forEach(p=>{ const r=p.room||'?'; byRoom[r]=(byRoom[r]||0)+1; });
+  const byRoom={}; all.forEach(p=>{ if(!p.room) return; byRoom[p.room]=(byRoom[p.room]||0)+1; });
   const roomRows=Object.keys(byRoom).map(r=>({r,n:byRoom[r]})).sort((a,b)=>b.n-a.n);
   const maxRoom=Math.max.apply(null,roomRows.map(x=>x.n).concat([1]));
   st+='<div class="s-section">Huoneittain</div>';
@@ -2427,6 +2442,14 @@ function renderProcLog(){
       sRows.forEach(r=>{ st+=`<div class="brow"><div class="l1">
         <span class="nm">${esc(r.x)}</span><span class="mt"><b>${r.n}</b> kpl</span></div>
         <div class="bar"><i style="width:${Math.max(3,Math.round(r.n/maxS*100))}%;background:#a5b4fc"></i></div></div>`; });
+    }
+    /* jatko TT-kuvasta */
+    const dst={}; strokes.forEach(p=>{ if(p.strokeDest) dst[p.strokeDest]=(dst[p.strokeDest]||0)+1; });
+    const dKeys=STROKE_DEST.filter(o=>dst[o]);
+    if(dKeys.length){
+      st+='<div class="miniL" style="margin:12px 2px 2px;">Jatko TT-kuvasta</div><div style="margin-top:6px">'
+        + dKeys.map(o=>`<span class="chipstat"><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${strokeDestColor(o)}"></span> ${esc(o)} <b>×${dst[o]}</b></span>`).join('')
+        + '</div>';
     }
   }
 
