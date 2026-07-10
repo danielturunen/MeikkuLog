@@ -22,7 +22,7 @@
   body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
     background:linear-gradient(180deg,var(--bg),#080c1a 60%); color:var(--text);
     min-height:100vh; padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
-    -webkit-font-smoothing:antialiased;}
+    -webkit-font-smoothing:antialiased; overscroll-behavior-y:none;}
   .wrap{max-width:580px; margin:0 auto; padding:14px 14px 120px;}
   header{display:flex; align-items:center; justify-content:space-between; gap:10px; padding:8px 2px 14px;}
   header h1{font-size:22px; margin:0; letter-spacing:.3px;}
@@ -274,10 +274,10 @@
   <header>
     <div style="display:flex; align-items:center; gap:10px;"><img src="icon-192.png" width="34" height="34" alt="" style="flex:none;border-radius:9px"><h1>MeikkuLog</h1></div>
     <div style="display:flex; gap:8px;">
-      <button class="iconbtn" id="viewBtn" title="Lista / kalenteri">🗓️</button>
-      <button class="iconbtn" id="logBtn" title="Hätätilapotilaat">🩸</button>
-      <button class="iconbtn" id="importBtn" title="Tuo / palauta">⤒</button>
-      <button class="iconbtn" id="exportBtn" title="Vie tiedot">⤓</button>
+      <button class="iconbtn" id="viewBtn" title="Lista / kalenteri" aria-label="Vaihda lista- ja kalenterinäkymän välillä">🗓️</button>
+      <button class="iconbtn" id="logBtn" title="Hätätilapotilaat" aria-label="Hätätilapotilaat ja toimenpiteet">🩸</button>
+      <button class="iconbtn" id="importBtn" title="Tuo / palauta" aria-label="Tuo tai palauta tietoja">⤒</button>
+      <button class="iconbtn" id="exportBtn" title="Vie tiedot" aria-label="Vie tiedot">⤓</button>
     </div>
   </header>
 
@@ -297,10 +297,10 @@
   </div>
 
   <div class="monthbar">
-    <button class="nav" id="prevM">‹</button>
+    <button class="nav" id="prevM" aria-label="Edellinen kuukausi">‹</button>
     <div class="m" id="monthLabel" style="flex:1; text-align:center;"></div>
     <button class="nav todaybtn" id="todayBtn" title="Siirry nykyiseen kuukauteen" style="display:none;">Tänään</button>
-    <button class="nav" id="nextM">›</button>
+    <button class="nav" id="nextM" aria-label="Seuraava kuukausi">›</button>
   </div>
 
   <div class="stats">
@@ -317,8 +317,8 @@
   <button id="qPatient">🩸 Lisää potilas</button>
   <button id="qProc">💉 Lisää toimenpide</button>
 </div>
-<button class="qfab" id="quickBtn" title="Pikakirjaus">⚡</button>
-<button class="fab" id="addBtn">+</button>
+<button class="qfab" id="quickBtn" title="Pikakirjaus" aria-label="Pikakirjaus">⚡</button>
+<button class="fab" id="addBtn" aria-label="Lisää vuoro">+</button>
 
 <!-- Kuvan suurennos -->
 <div class="lightbox" id="lightbox"><img alt="kuva"></div>
@@ -379,6 +379,7 @@
     <button class="btn ghost" id="expCsvProcs">Toimenpiteet (CSV)</button>
     <label class="fl">Kalenteri</label>
     <button class="btn ghost" id="expIcs">Vuorot kalenteriin (.ics)</button>
+    <div id="storageInfo" style="margin-top:16px;"></div>
     <p class="hint">JSON on ainoa muoto, josta tiedot voi palauttaa sovellukseen — ota se talteen säännöllisesti.
       CSV:t aukeavat Excelissä ja Numbersissa. .ics-tiedoston voi avata puhelimella, jolloin vuorot voi lisätä kalenteriin.</p>
     <button class="btn ghost" id="closeExport">Sulje</button>
@@ -993,18 +994,20 @@ function nextShift(){
 
 /* ---------- Saavutukset (lasketaan aina koko historiasta) ---------- */
 function achievementsHTML(){
-  const totH=shifts.reduce((a,s)=>a+shiftMinutes(s),0)/60;
-  const nights=shifts.filter(s=>{ const t=typeByCode(s.code); return t&&t.overnight; }).length;
-  const wes=shifts.filter(s=>isWeekend(s.date)).length;
+  /* vain tehdyt vuorot lasketaan — tulevat suunnitellut eivät avaa merkkejä */
+  const done=shifts.filter(shiftIsPast);
+  const totH=done.reduce((a,s)=>a+shiftMinutes(s),0)/60;
+  const nights=done.filter(s=>{ const t=typeByCode(s.code); return t&&t.overnight; }).length;
+  const wes=done.filter(s=>isWeekend(s.date)).length;
   const roomIds=LOCS.filter(l=>l.room).map(l=>l.id);
-  const worked=new Set(); shifts.forEach(s=>(s.segments||[]).forEach(g=>{ if(roomIds.includes(g.loc)) worked.add(g.loc); }));
-  const days=[...new Set(shifts.map(s=>s.date))].sort();
+  const worked=new Set(); done.forEach(s=>(s.segments||[]).forEach(g=>{ if(roomIds.includes(g.loc)) worked.add(g.loc); }));
+  const days=[...new Set(done.map(s=>s.date))].sort();
   let run=days.length?1:0, bestRun=run;
   for(let i=1;i<days.length;i++){
     if(new Date(days[i]+'T12:00')-new Date(days[i-1]+'T12:00')===86400000){ run++; if(run>bestRun) bestRun=run; }
     else run=1;
   }
-  const mStreak=monthStreak(shifts.concat(traumas).concat(procs));
+  const mStreak=monthStreak(done.concat(traumas).concat(procs));
   const intub=procs.filter(p=>p.type==='intubaatio').length;
   const cans=procs.filter(p=>procTypeById(p.type).cannula).length;
   const rosc=procs.filter(p=>p.type==='elvytys'&&p.cprOutcome==='ROSC saavutettu').length;
@@ -1013,11 +1016,11 @@ function achievementsHTML(){
 
   /* [ikoni, nimi, tavoite, nykyarvo] */
   const A=[
-    ['🩺','Ensimmäinen vuoro',        1,   shifts.length],
-    ['📅','10 vuoroa',                10,  shifts.length],
-    ['💪','50 vuoroa',                50,  shifts.length],
-    ['🏅','100 vuoroa',               100, shifts.length],
-    ['👑','250 vuoroa',               250, shifts.length],
+    ['🩺','Ensimmäinen vuoro',        1,   done.length],
+    ['📅','10 vuoroa',                10,  done.length],
+    ['💪','50 vuoroa',                50,  done.length],
+    ['🏅','100 vuoroa',               100, done.length],
+    ['👑','250 vuoroa',               250, done.length],
     ['⏱️','100 tuntia',               100, totH],
     ['🔥','500 tuntia',               500, totH],
     ['🚀','1000 tuntia',              1000,totH],
@@ -1479,9 +1482,27 @@ async function deliverFile(name, mime, content){
 async function doExport(){
   const ok=await deliverFile('meikkulog-varmuuskopio.json','application/json',
     JSON.stringify({shifts,traumas,procs,exported:new Date().toISOString()},null,2));
-  if(ok){ lsSet(LS_BACKUP, new Date().toISOString()); updateBackupBanner(); }
+  if(ok){ lsSet(LS_BACKUP, new Date().toISOString()); updateBackupBanner(); renderStorageInfo(); }
 }
-document.getElementById('exportBtn').onclick=()=>document.getElementById('exportSheet').classList.add('open');
+/* Tallennustila & viimeisin varmuuskopio vientipaneeliin */
+function renderStorageInfo(){
+  const el=document.getElementById('storageInfo'); if(!el) return;
+  let bytes=0;
+  for(let i=0;i<localStorage.length;i++){ const k=localStorage.key(i); bytes+=(k.length+(localStorage.getItem(k)||'').length)*2; }
+  const mb=bytes/1048576, quota=5; /* tyypillinen localStorage-kiintiö ~5 Mt */
+  const pc=Math.min(100, Math.round(mb/quota*100));
+  const warn=pc>=70;
+  const size = mb<1 ? Math.round(bytes/1024)+' kt' : (Math.round(mb*10)/10).toString().replace('.',',')+' Mt';
+  const lb=localStorage.getItem(LS_BACKUP);
+  let lbTxt='ei vielä kertaakaan';
+  if(lb){ const d=new Date(lb); if(!isNaN(d)) lbTxt=d.getDate()+'.'+(d.getMonth()+1)+'.'+d.getFullYear(); }
+  el.innerHTML=`<div class="brow"><div class="l1">
+      <span class="nm">Tallennustila</span>
+      <span class="mt"><b>${size}</b> / ~${quota} Mt</span></div>
+      <div class="bar"><i style="width:${Math.max(3,pc)}%;background:${warn?'var(--warn)':'var(--accent)'}"></i></div></div>
+    <div class="hint" style="margin-top:6px;">Viimeisin varmuuskopio: <b>${lbTxt}</b>.${warn?' Tila alkaa täyttyä — kuvat vievät eniten tilaa; poista tarpeettomia kuvia vanhoista kirjauksista.':''}</div>`;
+}
+document.getElementById('exportBtn').onclick=()=>{ renderStorageInfo(); document.getElementById('exportSheet').classList.add('open'); };
 document.getElementById('closeExport').onclick=()=>document.getElementById('exportSheet').classList.remove('open');
 document.getElementById('expJson').onclick=doExport;
 document.getElementById('backupNow').onclick=doExport;
