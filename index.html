@@ -392,9 +392,14 @@
     <div class="grab"></div>
     <h2>Roolitilastot</h2>
     <div class="scopebar">
-      <button class="scope on" id="scMonth">Tämä kuukausi</button>
+      <button class="scope on" id="scMonth">Kuukausi</button>
       <button class="scope" id="scYear">Vuosi</button>
       <button class="scope" id="scAll">Kaikki</button>
+    </div>
+    <div class="monthbar" id="stMonthNav" style="margin-bottom:12px;">
+      <button class="nav" id="stPrevM" aria-label="Edellinen jakso">‹</button>
+      <div class="m" id="stPeriodLabel" style="flex:1; text-align:center;"></div>
+      <button class="nav" id="stNextM" aria-label="Seuraava jakso">›</button>
     </div>
     <div id="statsList"></div>
     <button class="btn ghost" id="closeStats">Sulje</button>
@@ -1054,19 +1059,19 @@ function achievementsHTML(){
 }
 
 /* ---------- Roolitilastot ---------- */
-let statsScope='month';
+let statsScope='month', statsYear, statsMonth;
+(function(){ const n=new Date(); statsYear=n.getFullYear(); statsMonth=n.getMonth(); })();
 function renderStats(){
-  const nowSt=new Date();
-  document.getElementById('scMonth').textContent =
-    (viewYear===nowSt.getFullYear() && viewMonth===nowSt.getMonth()) ? 'Tämä kuukausi' : MONTHS[viewMonth]+' '+viewYear;
   document.getElementById('scMonth').classList.toggle('on', statsScope==='month');
-  document.getElementById('scYear').textContent=String(viewYear);
   document.getElementById('scYear').classList.toggle('on', statsScope==='year');
   document.getElementById('scAll').classList.toggle('on', statsScope==='all');
+  document.getElementById('stMonthNav').style.display = statsScope==='all' ? 'none' : 'flex';
+  document.getElementById('stPeriodLabel').textContent =
+    statsScope==='year' ? String(statsYear) : MONTHS[statsMonth]+' '+statsYear;
   const src0 = statsScope==='month'
-    ? shifts.filter(s=>{ const d=new Date(s.date+'T12:00'); return d.getFullYear()===viewYear && d.getMonth()===viewMonth; })
+    ? shifts.filter(s=>{ const d=new Date(s.date+'T12:00'); return d.getFullYear()===statsYear && d.getMonth()===statsMonth; })
     : statsScope==='year'
-    ? shifts.filter(s=>{ const d=new Date(s.date+'T12:00'); return d.getFullYear()===viewYear; })
+    ? shifts.filter(s=>{ const d=new Date(s.date+'T12:00'); return d.getFullYear()===statsYear; })
     : shifts.slice();
   /* vain roolitetut mukaan: ?-osiot pois, kokonaan roolittamattomat vuorot ohitetaan */
   const marked=seg=>!(seg.loc==='Muu' && (!seg.custom || seg.custom.trim()==='' || seg.custom.trim()==='?'));
@@ -1239,10 +1244,23 @@ function renderStats(){
   if(skipped) h+=`<div class="hint" style="margin-top:14px;">${skipped} roolittamatonta vuoroa jätetty pois tilastoista — merkkaa roolit niin ne lasketaan mukaan.</div>`;
   el.innerHTML=h;
 }
-document.getElementById('stRoles').onclick=()=>{ renderStats(); document.getElementById('statsSheet').classList.add('open'); };
+document.getElementById('stRoles').onclick=()=>{
+  statsYear=viewYear; statsMonth=viewMonth;
+  renderStats(); document.getElementById('statsSheet').classList.add('open');
+};
 document.getElementById('scMonth').onclick=()=>{ statsScope='month'; renderStats(); };
 document.getElementById('scYear').onclick=()=>{ statsScope='year'; renderStats(); };
 document.getElementById('scAll').onclick=()=>{ statsScope='all'; renderStats(); };
+document.getElementById('stPrevM').onclick=()=>{
+  if(statsScope==='year'){ statsYear--; }
+  else { if(--statsMonth<0){ statsMonth=11; statsYear--; } }
+  renderStats();
+};
+document.getElementById('stNextM').onclick=()=>{
+  if(statsScope==='year'){ statsYear++; }
+  else { if(++statsMonth>11){ statsMonth=0; statsYear++; } }
+  renderStats();
+};
 document.getElementById('closeStats').onclick=()=>document.getElementById('statsSheet').classList.remove('open');
 
 /* ---------- Editori ---------- */
