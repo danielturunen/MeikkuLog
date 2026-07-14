@@ -55,6 +55,51 @@ try{ var _t=localStorage.getItem('tv_theme'); if(_t) document.documentElement.da
     --r:24px; --r2:18px; --r3:14px; --r4:10px; --rp:30px;
     --cardshadow:0 8px 22px rgba(0,0,0,.28);
   }
+
+  /* ---- Rakenteelliset teemaerot ---- */
+  /* Päivävuoro: reunattomat kortit jotka kelluvat varjoilla, ilmavampi */
+  html[data-theme=vaalea] .shift, html[data-theme=vaalea] .stat, html[data-theme=vaalea] .brow,
+  html[data-theme=vaalea] .trow, html[data-theme=vaalea] .tile, html[data-theme=vaalea] .monthbar,
+  html[data-theme=vaalea] .calwrap, html[data-theme=vaalea] .ach{border-color:transparent;}
+  html[data-theme=vaalea] .shift{margin-bottom:12px;}
+  html[data-theme=vaalea] .day{margin-bottom:14px;}
+  html[data-theme=vaalea] .fab{box-shadow:0 10px 26px rgba(53,100,224,.4);}
+
+  /* Scrubs: kliininen potilaskertomus — värillinen reunapalkki, viivotetut otsikot, tiivis */
+  html[data-theme=scrubs] .shift{border-left:5px solid var(--accent);}
+  html[data-theme=scrubs] .trow{border-left:4px solid var(--line);}
+  html[data-theme=scrubs] .daylabel, html[data-theme=scrubs] .logmonth{
+    text-transform:uppercase; letter-spacing:1.5px; border-bottom:1px solid var(--line); padding-bottom:4px;}
+  html[data-theme=scrubs] header h1{text-transform:uppercase; letter-spacing:2.5px; font-size:16px;}
+  html[data-theme=scrubs] .wrap{padding:10px 10px 120px;}
+  html[data-theme=scrubs] .shift{padding:9px 10px;}
+  html[data-theme=scrubs] .s-section{border-bottom:1px solid var(--line); padding-bottom:4px;}
+  html[data-theme=scrubs] .badge .code{font-size:19px;}
+
+  /* Terminaali: scanlinet, hehkuva teksti, kulmikkaat napit, prompt-otsikko */
+  html[data-theme=terminaali] body::after{content:''; position:fixed; inset:0; pointer-events:none; z-index:200;
+    background:repeating-linear-gradient(0deg, rgba(0,0,0,.22) 0 1px, transparent 1px 3px);}
+  html[data-theme=terminaali] body{text-shadow:0 0 7px rgba(141,251,155,.3);}
+  html[data-theme=terminaali] header h1::before{content:'> ';color:var(--accent);}
+  html[data-theme=terminaali] .daylabel, html[data-theme=terminaali] .logmonth,
+  html[data-theme=terminaali] .s-section{text-transform:uppercase;}
+  html[data-theme=terminaali] .fab, html[data-theme=terminaali] .qfab{border-radius:4px; box-shadow:0 0 18px rgba(255,176,0,.35);}
+  html[data-theme=terminaali] .fab{background:var(--accent); color:#1a1000;}
+  html[data-theme=terminaali] .codepill, html[data-theme=terminaali] .badge{text-shadow:none;}
+  html[data-theme=terminaali] .bar{height:8px; border:1px solid var(--line); background:transparent;}
+
+  /* Kupla: pillerinapit, pyöreät badget, liukuväri-korostukset */
+  html[data-theme=kupla] .chip, html[data-theme=kupla] .tg, html[data-theme=kupla] .scope,
+  html[data-theme=kupla] .btn, html[data-theme=kupla] .nav, html[data-theme=kupla] .iconbtn,
+  html[data-theme=kupla] .addseg, html[data-theme=kupla] .addimg,
+  html[data-theme=kupla] .backupbanner button{border-radius:999px;}
+  html[data-theme=kupla] .badge{border-radius:50%; width:48px; min-width:48px; height:48px; align-self:center;}
+  html[data-theme=kupla] .fab, html[data-theme=kupla] .btn.primary, html[data-theme=kupla] .scope.on,
+  html[data-theme=kupla] .tg.on, html[data-theme=kupla] .nowtag{
+    background:linear-gradient(135deg,#f472b6,#8b5cf6); border-color:transparent;}
+  html[data-theme=kupla] .fab{box-shadow:0 10px 26px rgba(139,92,246,.5);}
+  html[data-theme=kupla] .stat{text-align:center;}
+  html[data-theme=kupla] .codepill, html[data-theme=kupla] .traumatag, html[data-theme=kupla] .ptag{border-radius:999px;}
   *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
   html,body{margin:0; padding:0;}
   body{font-family:var(--font);
@@ -337,9 +382,7 @@ try{ var _t=localStorage.getItem('tv_theme'); if(_t) document.documentElement.da
     <div style="display:flex; gap:8px;">
       <button class="iconbtn" id="viewBtn" title="Lista / kalenteri" aria-label="Vaihda lista- ja kalenterinäkymän välillä">🗓️</button>
       <button class="iconbtn" id="logBtn" title="Hätätilapotilaat" aria-label="Hätätilapotilaat ja toimenpiteet">🩸</button>
-      <button class="iconbtn" id="importBtn" title="Tuo / palauta" aria-label="Tuo tai palauta tietoja">⤒</button>
-      <button class="iconbtn" id="exportBtn" title="Vie tiedot" aria-label="Vie tiedot">⤓</button>
-      <button class="iconbtn" id="settingsBtn" title="Asetukset" aria-label="Asetukset">⚙️</button>
+      <button class="iconbtn" id="settingsBtn" title="Asetukset" aria-label="Asetukset, varmuuskopiot ja vienti">⚙️</button>
     </div>
   </header>
 
@@ -434,29 +477,39 @@ try{ var _t=localStorage.getItem('tv_theme'); if(_t) document.documentElement.da
   <div class="panel">
     <div class="grab"></div>
     <h2>Asetukset</h2>
-    <label class="fl">Teema</label>
+
+    <div class="s-section" style="margin-top:8px;">Teema</div>
     <div class="themegrid" id="themeGrid"></div>
     <p class="hint">Teema vaikuttaa väreihin, muotoihin ja fonttiin. Valinta tallennetaan tähän laitteeseen.</p>
-    <button class="btn ghost" id="closeSettings">Sulje</button>
-  </div>
-</div>
 
-<!-- Vienti -->
-<div class="sheet" id="exportSheet">
-  <div class="panel">
-    <div class="grab"></div>
-    <h2>Vie tiedot</h2>
+    <div class="s-section">Varmuuskopio & vienti</div>
     <button class="btn primary" id="expJson">📦 JSON-varmuuskopio</button>
+    <div id="storageInfo" style="margin-top:10px;"></div>
     <label class="fl">Excel / taulukot (CSV)</label>
     <button class="btn ghost" id="expCsvShifts">Vuorot (CSV)</button>
     <button class="btn ghost" id="expCsvPatients">Potilaat (CSV)</button>
     <button class="btn ghost" id="expCsvProcs">Toimenpiteet (CSV)</button>
     <label class="fl">Kalenteri</label>
     <button class="btn ghost" id="expIcs">Vuorot kalenteriin (.ics)</button>
-    <div id="storageInfo" style="margin-top:16px;"></div>
     <p class="hint">JSON on ainoa muoto, josta tiedot voi palauttaa sovellukseen — ota se talteen säännöllisesti.
       CSV:t aukeavat Excelissä ja Numbersissa. .ics-tiedoston voi avata puhelimella, jolloin vuorot voi lisätä kalenteriin.</p>
-    <button class="btn ghost" id="closeExport">Sulje</button>
+
+    <div class="s-section">Tuo / palauta</div>
+    <label class="fl">Palauta varmuuskopiosta (JSON-tiedosto)</label>
+    <input type="file" id="impFile" accept=".json,application/json,text/plain">
+    <label class="fl">Tai liitä vuorokoodi / varmuuskopion sisältö</label>
+    <textarea id="impText" placeholder="11.6.2026 C 07:15-14:30 H2; 14:30-19:45 RH/H3&#10;12.6.2026 Y (H3)&#10;13.6.2026 A H2elv"></textarea>
+    <button class="btn primary" id="impGo">Tuo</button>
+    <div class="okmsg" id="impMsg"></div>
+    <p class="hint">
+      Rivimuoto: <code>pp.kk.vvvv VUOROKOODI</code> ja perään valinnaisesti osiot, esim.<br>
+      <code>11.6.2026 C 07:15-14:30 H2; 14:30-19:45 RH/H3</code><br>
+      Rooli voi olla esim. <code>H2</code>, <code>(H2)</code>, <code>H2elv</code>, <code>H2/AMB</code>, <code>H3/TRAU</code>, <code>RH/H3</code>, <code>RH/T-Aula</code>, <code>AMBreboa</code>, <code>H4ane2/knk</code>, <code>RH</code>.
+      Jos rooli puuttuu, vuoro merkitään <code>?</code>-roolilla ja voit täydentää sen myöhemmin.
+      Jos samalle päivälle on jo vuoro, tuonti korvaa sen.
+    </p>
+
+    <button class="btn ghost" id="closeSettings">Sulje</button>
   </div>
 </div>
 
@@ -477,31 +530,6 @@ try{ var _t=localStorage.getItem('tv_theme'); if(_t) document.documentElement.da
     </div>
     <div id="statsList"></div>
     <button class="btn ghost" id="closeStats">Sulje</button>
-  </div>
-</div>
-
-<!-- Tuo / palauta -->
-<div class="sheet" id="importSheet">
-  <div class="panel">
-    <div class="grab"></div>
-    <h2>Tuo / palauta</h2>
-
-    <label class="fl">Palauta varmuuskopiosta (JSON-tiedosto)</label>
-    <input type="file" id="impFile" accept=".json,application/json,text/plain">
-
-    <label class="fl">Tai liitä vuorokoodi / varmuuskopion sisältö</label>
-    <textarea id="impText" placeholder="11.6.2026 C 07:15-14:30 H2; 14:30-19:45 RH/H3&#10;12.6.2026 Y (H3)&#10;13.6.2026 A H2elv"></textarea>
-    <button class="btn primary" id="impGo">Tuo</button>
-    <div class="okmsg" id="impMsg"></div>
-
-    <p class="hint">
-      Rivimuoto: <code>pp.kk.vvvv VUOROKOODI</code> ja perään valinnaisesti osiot, esim.<br>
-      <code>11.6.2026 C 07:15-14:30 H2; 14:30-19:45 RH/H3</code><br>
-      Rooli voi olla esim. <code>H2</code>, <code>(H2)</code>, <code>H2elv</code>, <code>H2/AMB</code>, <code>H3/TRAU</code>, <code>RH/H3</code>, <code>RH/T-Aula</code>, <code>AMBreboa</code>, <code>H4ane2/knk</code>, <code>RH</code>.
-      Jos rooli puuttuu, vuoro merkitään <code>?</code>-roolilla ja voit täydentää sen myöhemmin.
-      Jos samalle päivälle on jo vuoro, tuonti korvaa sen.
-    </p>
-    <button class="btn ghost" id="closeImport">Sulje</button>
   </div>
 </div>
 
@@ -1594,8 +1622,6 @@ function renderStorageInfo(){
       <div class="bar"><i style="width:${Math.max(3,pc)}%;background:${warn?'var(--warn)':'var(--accent)'}"></i></div></div>
     <div class="hint" style="margin-top:6px;">Viimeisin varmuuskopio: <b>${lbTxt}</b>.${warn?' Tila alkaa täyttyä — kuvat vievät eniten tilaa; poista tarpeettomia kuvia vanhoista kirjauksista.':''}</div>`;
 }
-document.getElementById('exportBtn').onclick=()=>{ renderStorageInfo(); document.getElementById('exportSheet').classList.add('open'); };
-document.getElementById('closeExport').onclick=()=>document.getElementById('exportSheet').classList.remove('open');
 document.getElementById('expJson').onclick=doExport;
 document.getElementById('backupNow').onclick=doExport;
 
@@ -1710,8 +1736,6 @@ function importLines(text){
 }
 function showImpMsg(txt){ const el=document.getElementById('impMsg'); el.textContent=txt; el.style.display='block'; }
 
-document.getElementById('importBtn').onclick=()=>{ document.getElementById('impMsg').style.display='none'; document.getElementById('importSheet').classList.add('open'); };
-document.getElementById('closeImport').onclick=()=>document.getElementById('importSheet').classList.remove('open');
 document.getElementById('impFile').onchange=e=>{
   const f=e.target.files[0]; if(!f) return;
   const r=new FileReader();
@@ -2728,7 +2752,11 @@ function renderThemeGrid(){
     </button>`).join('');
   g.querySelectorAll('.themecard').forEach(b=>b.onclick=()=>applyTheme(b.dataset.t));
 }
-document.getElementById('settingsBtn').onclick=()=>{ renderThemeGrid(); document.getElementById('settingsSheet').classList.add('open'); };
+document.getElementById('settingsBtn').onclick=()=>{
+  renderThemeGrid(); renderStorageInfo();
+  document.getElementById('impMsg').style.display='none';
+  document.getElementById('settingsSheet').classList.add('open');
+};
 document.getElementById('closeSettings').onclick=()=>document.getElementById('settingsSheet').classList.remove('open');
 syncThemeColor();
 
