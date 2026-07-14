@@ -102,6 +102,8 @@ try{ var _t=localStorage.getItem('tv_theme'); if(_t) document.documentElement.da
   html[data-theme=kupla] .codepill, html[data-theme=kupla] .traumatag, html[data-theme=kupla] .ptag{border-radius:999px;}
   *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
   html,body{margin:0; padding:0;}
+  /* Juuritaso teeman väriin: iOS värittää tilapalkin ja ylivieritysalueet tästä */
+  html{background:var(--bg);}
   body{font-family:var(--font);
     background:var(--bgrad); color:var(--text);
     min-height:100vh; padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
@@ -2759,6 +2761,8 @@ document.getElementById('settingsBtn').onclick=()=>{
 };
 document.getElementById('closeSettings').onclick=()=>document.getElementById('settingsSheet').classList.remove('open');
 syncThemeColor();
+/* iOS voi lukea theme-colorin uudelleen kun sovellus palaa etualalle */
+document.addEventListener('visibilitychange',()=>{ if(document.visibilityState==='visible') syncThemeColor(); });
 
 /* ---------- Offline-tuki & päivitysbanneri ---------- */
 if('serviceWorker' in navigator){
