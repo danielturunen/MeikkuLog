@@ -966,7 +966,7 @@ function renderShiftCard(s, list, marks){
         <div class="seg"><span class="dot" style="background:${roleColor(seg)}"></span>
           <span class="st">${seg.start}–${seg.end}</span>
           <span class="rc">${esc(roleCode(seg))}</span></div>`).join('')}</div>
-      ${s.flag?(f=>`<div style="margin-top:6px;"><span class="traumatag" style="background:${f.color}">${f.icon} ${f.label}</span></div>`)(flagById(s.flag)):''}
+      ${s.flag?(f=>`<div style="margin-top:6px;"><span class="traumatag" style="background:${f.color}">${f.icon} ${f.label}${s.flag==='kesken'&&s.flagTime?' klo '+esc(s.flagTime):''}</span></div>`)(flagById(s.flag)):''}
       ${s.preChange?`<div class="relocnote">🔁
         <span style="color:${locColor(s.preChange.from)}">${esc(locName(s.preChange.from,s.preChange.fromCustom))}</span>
         <span class="arr">→</span>
@@ -1521,13 +1521,13 @@ function openShift(id){
   document.getElementById('sheetTitle').textContent='Muokkaa vuoroa';
   document.getElementById('deleteShift').style.display='block';
   document.getElementById('fDate').value=draft.date;
-  draft.flag=draft.flag||'';
+  draft.flag=draft.flag||''; draft.flagTime=draft.flagTime||'';
   buildTypeGrid(); buildSegs(); buildReloc(); buildFlagChips(); buildTraumaSection(); buildProcSection();
   document.getElementById('shiftSheet').classList.add('open');
 }
 function openNew(dateStr){
   editingId=null; const today=dateStr||ymd(new Date());
-  draft={id:rid(), date:today, code:'A', weCode:false, segments:[], start:'', end:'', preChange:null, flag:''};
+  draft={id:rid(), date:today, code:'A', weCode:false, segments:[], start:'', end:'', preChange:null, flag:'', flagTime:''};
   document.getElementById('sheetTitle').textContent='Lisää vuoro';
   document.getElementById('deleteShift').style.display='none';
   document.getElementById('fDate').value=today;
@@ -1537,9 +1537,15 @@ function openNew(dateStr){
 function buildFlagChips(){
   const c=document.getElementById('flagChips'); if(!c||!draft) return;
   c.innerHTML=SHIFT_FLAGS.map(f=>`<button class="chip ${draft.flag===f.id?'sel':''}" data-f="${f.id}"
-    style="${draft.flag===f.id?`background:${f.color};color:#06122b`:''}">${f.icon} ${f.label}</button>`).join('');
+    style="${draft.flag===f.id?`background:${f.color};color:#06122b`:''}">${f.icon} ${f.label}</button>`).join('')
+    + (draft.flag==='kesken'
+      ? `<div style="flex-basis:100%; margin-top:4px;"><label class="fl" style="margin:6px 0 6px;">Mihin aikaan lähdit?</label>
+         <input type="time" id="flagTime" value="${draft.flagTime||''}"></div>`
+      : '');
   c.querySelectorAll('.chip').forEach(el=>el.onclick=()=>{
     draft.flag = draft.flag===el.dataset.f ? '' : el.dataset.f; buildFlagChips(); });
+  const ft=document.getElementById('flagTime');
+  if(ft) ft.onchange=e=>{ draft.flagTime=e.target.value; };
 }
 function closeShift(){ document.getElementById('shiftSheet').classList.remove('open'); }
 
@@ -1553,7 +1559,24 @@ document.getElementById('saveShift').onclick=()=>{
     if(s.loc==='Muu' && !s.custom.trim()){ alert('Kirjoita rooli "Muu"-osiolle tai valitse sijainti.'); return; }
     if(s.start===s.end){ alert('Osion alku- ja loppuaika ovat samat — korjaa ajat.'); return; }
   }
-  const rec={id:editingId||draft.id||rid(), date:draft.date, code:draft.code, weCode:draft.weCode, start:draft.start, end:draft.end, flag:draft.flag||'',
+  /* kesken lähtö: vaadi aika ja katkaise osiot siihen (yövuorot huomioiden) */
+  if(draft.flag==='kesken'){
+    if(!draft.flagTime){ alert('Merkitse mihin aikaan lähdit vuorosta.'); return; }
+    const s0=toMin(draft.segments[0].start);
+    const rel=t=>(toMin(t)-s0+1440)%1440;
+    const rt=rel(draft.flagTime);
+    if(rt===0){ alert('Lähtöaika ei voi olla sama kuin vuoron alku.'); return; }
+    const out=[];
+    for(const seg of draft.segments){
+      const rs=rel(seg.start); let re=rel(seg.end); if(re<=rs) re+=1440;
+      if(rs>=rt) break;
+      if(re>rt){ out.push(Object.assign({},seg,{end:draft.flagTime})); break; }
+      out.push(seg);
+    }
+    draft.segments=out; syncMeta(); buildSegs(); buildFlagChips();
+  } else draft.flagTime='';
+  const rec={id:editingId||draft.id||rid(), date:draft.date, code:draft.code, weCode:draft.weCode, start:draft.start, end:draft.end,
+    flag:draft.flag||'', flagTime:draft.flagTime||'',
     segments:draft.segments.map(s=>({start:s.start,end:s.end,loc:s.loc,vastaava:s.vastaava,suffix:s.suffix,rh:s.rh,custom:s.custom}))};
   if(draft.preChange){
     const pc=draft.preChange;
@@ -1672,7 +1695,7 @@ function shiftsCSV(){
     const min=s.segments.reduce((a,x)=>a+dur(x.start,x.end),0);
     const segs=s.segments.map(seg=>seg.start+'-'+seg.end+' '+roleCode(seg)).join(' | ');
     const pc=s.preChange?(locName(s.preChange.from,s.preChange.fromCustom)+' -> '+locName(s.preChange.to,s.preChange.toCustom)):'';
-    const fl=s.flag?(flagById(s.flag)||{label:s.flag}).label:'';
+    const fl=s.flag?((flagById(s.flag)||{label:s.flag}).label+(s.flag==='kesken'&&s.flagTime?' klo '+s.flagTime:'')):'';
     rows.push([s.date,s.code,t.name,s.start,s.end,dec2(min/60),segs,pc,fl]);
   });
   return toCSV(rows);
