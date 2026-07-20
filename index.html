@@ -460,6 +460,9 @@ try{ var _t=localStorage.getItem('tv_theme'); if(_t) document.documentElement.da
       <input type="text" id="relocToCustom" placeholder="Uusi — kirjoita sijoitus" style="display:none;">
     </div>
 
+    <label class="fl">Vuoron merkintä (valinnainen)</label>
+    <div class="chips" id="flagChips"></div>
+
     <div class="seglabel">Hätätilapotilaat</div>
     <div id="traumaSection"></div>
     <button class="addseg" id="addTraumaBtn">+ Lisää potilas</button>
@@ -664,6 +667,17 @@ const SHIFT_CATS=[
   {id:'yo',   label:'Yövuorot',   short:'Yö',   codes:['Y','Ö','W'], color:'#a5b4fc'},
 ];
 function shiftCat(code){ return SHIFT_CATS.find(c=>c.codes.includes(code)); }
+
+/* Vuoron merkinnät: kesken lähtö, sairasloma, ylimääräiset vuorot */
+const SHIFT_FLAGS=[
+  {id:'kesken',     label:'Lähdin kesken vuoron',       icon:'⏳', color:'#fbbf24'},
+  {id:'sairas',     label:'Sairasloma',                 icon:'🤒', color:'#f87171'},
+  {id:'extra_haly', label:'Ylimääräinen (hälytysraha)', icon:'💰', color:'#34d399'},
+  {id:'extra',      label:'Ylimääräinen (ei hälyä)',    icon:'➕', color:'#60a5fa'},
+];
+function flagById(id){ return SHIFT_FLAGS.find(f=>f.id===id); }
+/* Sairaslomavuoroa ei lasketa tehdyksi työksi */
+function isWorked(s){ return s.flag!=='sairas'; }
 
 /* ---------- Roolit / sijainnit ---------- */
 const LOCS = [
@@ -952,6 +966,7 @@ function renderShiftCard(s, list, marks){
         <div class="seg"><span class="dot" style="background:${roleColor(seg)}"></span>
           <span class="st">${seg.start}–${seg.end}</span>
           <span class="rc">${esc(roleCode(seg))}</span></div>`).join('')}</div>
+      ${s.flag?(f=>`<div style="margin-top:6px;"><span class="traumatag" style="background:${f.color}">${f.icon} ${f.label}</span></div>`)(flagById(s.flag)):''}
       ${s.preChange?`<div class="relocnote">🔁
         <span style="color:${locColor(s.preChange.from)}">${esc(locName(s.preChange.from,s.preChange.fromCustom))}</span>
         <span class="arr">→</span>
@@ -979,7 +994,7 @@ function render(){
   updateBackupBanner();
   const inYM = d => { const x=new Date(d+'T12:00'); return x.getFullYear()===viewYear && x.getMonth()===viewMonth; };
   const inMonth = shifts.filter(s=>inYM(s.date)).sort((a,b)=> a.date<b.date?-1:a.date>b.date?1:0);
-  let totalMin=0; inMonth.forEach(s=> s.segments.forEach(seg=> totalMin+=dur(seg.start,seg.end)));
+  let totalMin=0; inMonth.filter(isWorked).forEach(s=> s.segments.forEach(seg=> totalMin+=dur(seg.start,seg.end)));
   document.getElementById('stCount').textContent = inMonth.length;
   document.getElementById('stHours').textContent = fmtH(totalMin);
   document.getElementById('stLogCount').textContent =
@@ -1039,7 +1054,7 @@ function renderCalGrid(inMonth){
       const day=i-lead+1;
       const ds=viewYear+'-'+pad2(viewMonth+1)+'-'+pad2(day);
       const ss=byDate[ds]||[];
-      ss.forEach(s=>s.segments.forEach(seg=>weekMin+=dur(seg.start,seg.end)));
+      ss.filter(isWorked).forEach(s=>s.segments.forEach(seg=>weekMin+=dur(seg.start,seg.end)));
       const s0=ss[0];
       const t=s0?(typeByCode(s0.code)||{color:'#cbd5e1'}):null;
       const codeShown=s0?((s0.weCode && isWeekend(s0.date) && t.we)?t.we.code:s0.code):'';
@@ -1104,7 +1119,7 @@ function nextShift(){
 /* ---------- Saavutukset (lasketaan aina koko historiasta) ---------- */
 function achievementsHTML(){
   /* vain tehdyt vuorot lasketaan — tulevat suunnitellut eivät avaa merkkejä */
-  const done=shifts.filter(shiftIsPast);
+  const done=shifts.filter(s=>shiftIsPast(s)&&isWorked(s));
   const totH=done.reduce((a,s)=>a+shiftMinutes(s),0)/60;
   const nights=done.filter(s=>{ const t=typeByCode(s.code); return t&&t.overnight; }).length;
   const wes=done.filter(s=>isWeekend(s.date)).length;
@@ -1177,10 +1192,13 @@ function renderStats(){
     : statsScope==='year'
     ? shifts.filter(s=>{ const d=new Date(s.date+'T12:00'); return d.getFullYear()===statsYear; })
     : shifts.slice();
+  /* vuoromerkinnät jaksossa; sairaslomat pois työtilastoista */
+  const flagCnt={}; src0.forEach(s=>{ if(s.flag) flagCnt[s.flag]=(flagCnt[s.flag]||0)+1; });
+  const worked0=src0.filter(isWorked);
   /* vain roolitetut mukaan: ?-osiot pois, kokonaan roolittamattomat vuorot ohitetaan */
   const marked=seg=>!(seg.loc==='Muu' && (!seg.custom || seg.custom.trim()==='' || seg.custom.trim()==='?'));
   const src=[]; let skipped=0;
-  src0.forEach(s=>{
+  worked0.forEach(s=>{
     const ms=s.segments.filter(marked);
     if(ms.length) src.push(Object.assign({},s,{segments:ms})); else skipped++;
   });
@@ -1322,6 +1340,15 @@ function renderStats(){
       + chips.map(c=>`<span class="chipstat">${esc(c[0])} <b>×${c[1]}</b></span>`).join('')+'</div>';
   }
   if(weMin) h+=`<div class="hint" style="margin-top:4px;">Viikonlopputunteja ${fmtH(weMin)} (${pct(weMin)} % kaikista).</div>`;
+
+  /* vuoromerkinnät: sairaslomat, kesken lähdöt, ylimääräiset */
+  if(Object.keys(flagCnt).length){
+    h+='<div class="s-section">Merkinnät</div><div>'
+      + SHIFT_FLAGS.filter(f=>flagCnt[f.id]).map(f=>
+          `<span class="chipstat"><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${f.color}"></span> ${f.icon} ${esc(f.label)} <b>×${flagCnt[f.id]}</b></span>`).join('')
+      + '</div>';
+    if(flagCnt.sairas) h+='<div class="hint" style="margin-top:4px;">Sairaslomavuoroja ei lasketa tunteihin eikä työtilastoihin.</div>';
+  }
 
   /* viikonpäivät */
   const maxD=Math.max.apply(null,dowMin.concat([1]));
@@ -1494,17 +1521,25 @@ function openShift(id){
   document.getElementById('sheetTitle').textContent='Muokkaa vuoroa';
   document.getElementById('deleteShift').style.display='block';
   document.getElementById('fDate').value=draft.date;
-  buildTypeGrid(); buildSegs(); buildReloc(); buildTraumaSection(); buildProcSection();
+  draft.flag=draft.flag||'';
+  buildTypeGrid(); buildSegs(); buildReloc(); buildFlagChips(); buildTraumaSection(); buildProcSection();
   document.getElementById('shiftSheet').classList.add('open');
 }
 function openNew(dateStr){
   editingId=null; const today=dateStr||ymd(new Date());
-  draft={id:rid(), date:today, code:'A', weCode:false, segments:[], start:'', end:'', preChange:null};
+  draft={id:rid(), date:today, code:'A', weCode:false, segments:[], start:'', end:'', preChange:null, flag:''};
   document.getElementById('sheetTitle').textContent='Lisää vuoro';
   document.getElementById('deleteShift').style.display='none';
   document.getElementById('fDate').value=today;
-  selectType('A'); buildReloc(); buildTraumaSection(); buildProcSection();
+  selectType('A'); buildReloc(); buildFlagChips(); buildTraumaSection(); buildProcSection();
   document.getElementById('shiftSheet').classList.add('open');
+}
+function buildFlagChips(){
+  const c=document.getElementById('flagChips'); if(!c||!draft) return;
+  c.innerHTML=SHIFT_FLAGS.map(f=>`<button class="chip ${draft.flag===f.id?'sel':''}" data-f="${f.id}"
+    style="${draft.flag===f.id?`background:${f.color};color:#06122b`:''}">${f.icon} ${f.label}</button>`).join('');
+  c.querySelectorAll('.chip').forEach(el=>el.onclick=()=>{
+    draft.flag = draft.flag===el.dataset.f ? '' : el.dataset.f; buildFlagChips(); });
 }
 function closeShift(){ document.getElementById('shiftSheet').classList.remove('open'); }
 
@@ -1518,7 +1553,7 @@ document.getElementById('saveShift').onclick=()=>{
     if(s.loc==='Muu' && !s.custom.trim()){ alert('Kirjoita rooli "Muu"-osiolle tai valitse sijainti.'); return; }
     if(s.start===s.end){ alert('Osion alku- ja loppuaika ovat samat — korjaa ajat.'); return; }
   }
-  const rec={id:editingId||draft.id||rid(), date:draft.date, code:draft.code, weCode:draft.weCode, start:draft.start, end:draft.end,
+  const rec={id:editingId||draft.id||rid(), date:draft.date, code:draft.code, weCode:draft.weCode, start:draft.start, end:draft.end, flag:draft.flag||'',
     segments:draft.segments.map(s=>({start:s.start,end:s.end,loc:s.loc,vastaava:s.vastaava,suffix:s.suffix,rh:s.rh,custom:s.custom}))};
   if(draft.preChange){
     const pc=draft.preChange;
@@ -1631,13 +1666,14 @@ document.getElementById('backupNow').onclick=doExport;
 function csvEsc(v){ v=(v==null?'':String(v)); return /[";\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v; }
 function toCSV(rows){ return '\ufeff'+rows.map(r=>r.map(csvEsc).join(';')).join('\r\n'); }
 function shiftsCSV(){
-  const rows=[['Päivämäärä','Koodi','Vuoro','Alku','Loppu','Tunnit','Osiot/roolit','Sijoitusmuutos']];
+  const rows=[['Päivämäärä','Koodi','Vuoro','Alku','Loppu','Tunnit','Osiot/roolit','Sijoitusmuutos','Merkintä']];
   shifts.slice().sort((a,b)=>a.date<b.date?-1:1).forEach(s=>{
     const t=typeByCode(s.code)||{name:s.code};
     const min=s.segments.reduce((a,x)=>a+dur(x.start,x.end),0);
     const segs=s.segments.map(seg=>seg.start+'-'+seg.end+' '+roleCode(seg)).join(' | ');
     const pc=s.preChange?(locName(s.preChange.from,s.preChange.fromCustom)+' -> '+locName(s.preChange.to,s.preChange.toCustom)):'';
-    rows.push([s.date,s.code,t.name,s.start,s.end,dec2(min/60),segs,pc]);
+    const fl=s.flag?(flagById(s.flag)||{label:s.flag}).label:'';
+    rows.push([s.date,s.code,t.name,s.start,s.end,dec2(min/60),segs,pc,fl]);
   });
   return toCSV(rows);
 }
