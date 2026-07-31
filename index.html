@@ -795,8 +795,9 @@ const TRAUMA_TYPES=[
 ];
 function traumaTypeById(id){ return TRAUMA_TYPES.find(t=>t.id===id)||TRAUMA_TYPES[0]; }
 
-/* Erikoisroolit, joiden aikana traumapotilaita yleensä kirjataan */
-const TRAUMA_ROLE_SUFFIXES=['TRAU','ane','ane2/knk'];
+/* Erikoisroolit, joiden aikana traumapotilaita yleensä kirjataan.
+   Myös reboa- ja AMB-erikoisliitin kuuluvat traumatiimiin. */
+const TRAUMA_ROLE_SUFFIXES=['TRAU','ane','ane2/knk','reboa','AMB'];
 function shiftHasTraumaRole(s){
   return (s.segments||[]).some(seg=> seg.loc==='AMBreboa' || TRAUMA_ROLE_SUFFIXES.includes(seg.suffix));
 }
@@ -807,18 +808,23 @@ function traumaRolePrefill(s){
   if(seg.suffix==='TRAU') return 'Traumahoitaja';
   if(seg.suffix==='ane') return 'Ane1';
   if(seg.suffix==='ane2/knk') return 'Ane2';
+  if(seg.suffix==='reboa') return 'Reboa';
+  if(seg.suffix==='AMB') return 'AMB';
   return '';
 }
 
-/* Roolit traumakirjauksissa — vain nämä neljä. Mikä tahansa "trauma" = Traumahoitaja. */
-const PATIENT_ROLES=['Traumahoitaja','Ane1','Ane2','AMBreboa'];
+/* Roolit traumakirjauksissa. Mikä tahansa "trauma" = Traumahoitaja. */
+const PATIENT_ROLES=['Traumahoitaja','Ane1','Ane2','AMBreboa','Reboa','AMB'];
+const PATIENT_ROLE_COLORS={Traumahoitaja:'#fca5a5',Ane1:'#fdba74',Ane2:'#fcd34d',AMBreboa:'#f9a8d4',Reboa:'#fb7185',AMB:'#a5b4fc'};
 function canonRole(s){
   s=(s||'').toString().trim();
   if(!s) return '';
   if(/trau/i.test(s)) return 'Traumahoitaja';
   if(/ane2/i.test(s)) return 'Ane2';
   if(/ane/i.test(s)) return 'Ane1';
-  if(/amb/i.test(s)) return 'AMBreboa';
+  if(/ambreboa/i.test(s)) return 'AMBreboa';   /* tarkistetaan ennen reboa/amb */
+  if(/reboa/i.test(s)) return 'Reboa';
+  if(/amb/i.test(s)) return 'AMB';
   return '';
 }
 /* Normalisoi aiemmin tallennetut arvot (ajetaan myös tuonnin jälkeen) */
@@ -1988,7 +1994,7 @@ function buildTraumaCpr(){
 function buildTraumaRoleChips(){
   const c=document.getElementById('tRoleChips');
   c.innerHTML=PATIENT_ROLES.map(r=>`<button class="chip ${traumaDraft.role===r?'sel':''}" data-role="${r}"
-     style="${traumaDraft.role===r?'background:#4f8cff;color:#fff':''}">${r}</button>`).join('');
+     style="${traumaDraft.role===r?`background:${PATIENT_ROLE_COLORS[r]||'#4f8cff'};color:#06122b`:''}">${r}</button>`).join('');
   c.querySelectorAll('.chip').forEach(el=>el.onclick=()=>{
     traumaDraft.role = (traumaDraft.role===el.dataset.role ? '' : el.dataset.role); buildTraumaRoleChips(); });
 }
@@ -2337,18 +2343,19 @@ function renderPatientLog(){
 
   /* tiimivuorot rooleittain (jaksossa) */
   if(teamShifts.length){
-    const roleCol={Traumahoitaja:'#fca5a5',Ane1:'#fdba74',Ane2:'#fcd34d',AMBreboa:'#f9a8d4'};
+    const roleCol=PATIENT_ROLE_COLORS;
     const teamByRole={}; PATIENT_ROLES.forEach(r=>teamByRole[r]=0);
     teamShifts.forEach(s=>{ const r=traumaRolePrefill(s); if(teamByRole[r]!==undefined) teamByRole[r]++; });
-    const maxRole=Math.max.apply(null, PATIENT_ROLES.map(r=>teamByRole[r]).concat([1]));
+    const shownRoles=PATIENT_ROLES.filter(r=>teamByRole[r]);
+    const maxRole=Math.max.apply(null, shownRoles.map(r=>teamByRole[r]).concat([1]));
     st+='<div class="s-section">Traumatiimivuorot rooleittain</div>';
-    PATIENT_ROLES.forEach(r=>{ const n=teamByRole[r];
+    shownRoles.forEach(r=>{ const n=teamByRole[r];
       st+=`<div class="brow"><div class="l1">
         <span class="codepill" style="background:${roleCol[r]}">${r}</span>
         <span class="nm"></span>
         <span class="mt"><b>${n}</b> vuoroa</span></div>
         <div class="bar"><i style="width:${Math.max(3,Math.round(n/maxRole*100))}%;background:${roleCol[r]}"></i></div></div>`; });
-    st+='<div class="hint" style="margin-top:4px;">AMBreboa osallistuu vain Raptor-hälytyksiin, jotka ovat myös traumahälytyksiä.</div>';
+    st+='<div class="hint" style="margin-top:4px;">Traumatiimiin lasketaan TRAU-, ane-, ane2/knk-, reboa- ja AMB-erikoisroolit sekä AMBreboa-sijoitus.</div>';
   }
 
   /* tylppä vs. terävä */
