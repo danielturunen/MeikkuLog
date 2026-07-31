@@ -587,6 +587,7 @@ try{ var _t=localStorage.getItem('tv_theme'); if(_t) document.documentElement.da
     <textarea id="tInj" placeholder="esim. rintarangan murtuma, oik. ilmarinta"></textarea>
 
     <div id="tTraumaExtra"></div>
+    <div id="tCprWrap" style="display:none;"></div>
 
     <label class="fl">Rooli</label>
     <div class="chips" id="tRoleChips"></div>
@@ -622,8 +623,6 @@ try{ var _t=localStorage.getItem('tv_theme'); if(_t) document.documentElement.da
     </div>
 
     <div id="pStrokeWrap" style="display:none;"></div>
-
-    <div id="pCprWrap" style="display:none;"></div>
 
     <div id="pRoomWrap">
       <label class="fl">Huone / sijainti</label>
@@ -701,10 +700,12 @@ function locName(id, custom){
   const l=locById(id); return l?l.id:id;
 }
 function locColor(id){ const l=locById(id); return l?l.color:'#cbd5e1'; }
+/* reboa ja AMB ovat mahdollisia erikoisrooleja kaikissa sijainneissa (paitsi AMBreboa) */
 const SUFFIXES = {
-  H2:['ane','elv','TRAU'], H3:['elv','TRAU'], H4:['elv','ane2/knk'], H5:['elv'],
-  H6:['elv'], H19:['elv'], HTA:['elv'], 'T-Aula':['elv'],
-  RH:['ane','ane2/knk','elv','TRAU','reboa']
+  H2:['ane','elv','TRAU','AMB','reboa'], H3:['elv','TRAU','AMB','reboa'], H4:['elv','ane2/knk','AMB','reboa'],
+  H5:['elv','AMB','reboa'], H6:['elv','AMB','reboa'], H19:['elv','AMB','reboa'], HTA:['elv','AMB','reboa'],
+  'T-Aula':['elv','AMB','reboa'],
+  RH:['ane','ane2/knk','elv','TRAU','AMB','reboa']
 };
 
 function roleCode(seg){
@@ -715,7 +716,7 @@ function roleCode(seg){
   const l=locById(seg.loc);
   if(seg.vastaava && l && !l.noVastaava) core='('+seg.loc+')';
   if(seg.suffix==='ane'||seg.suffix==='elv'||seg.suffix==='ane2/knk') core+=seg.suffix;
-  else if(seg.suffix==='AMB'||seg.suffix==='TRAU') core+='/'+seg.suffix;
+  else if(seg.suffix==='AMB'||seg.suffix==='TRAU'||seg.suffix==='reboa') core+='/'+seg.suffix;
   if(seg.rh) core='RH/'+core;
   return core;
 }
@@ -756,6 +757,7 @@ function parseRole(str){
   else if(/^ane$/i.test(rest)) suffix='ane';
   else if(/^elv$/i.test(rest)) suffix='elv';
   else if(/^\/?amb$/i.test(rest)) suffix='AMB';
+  else if(/^\/?reboa$/i.test(rest)) suffix='reboa';
   else if(/^\/?trau$/i.test(rest)) suffix='TRAU';
   else return muu(orig);
   if(base==='T-Aula') vast=false;
@@ -847,13 +849,29 @@ function migrateCprOutcomes(){
   if(changed) saveProcs();
 }
 migrateCprOutcomes();
+/* Migraatio: elvytys on nykyään potilaskirjaus — siirrä vanhat toimenpide-elvytykset potilaisiin */
+function migrateCprToPatients(){
+  const move=procs.filter(p=>p.type==='elvytys');
+  if(!move.length) return;
+  procs=procs.filter(p=>p.type!=='elvytys');
+  move.forEach(p=>{
+    traumas.push({id:p.id, shiftId:p.shiftId||null, date:p.date, type:'elvytys',
+      age:'', mechanism:'', injuries:'', role:'', notes:p.notes||'', traumaKind:'', survived:'',
+      disposition:[], dispositionDetail:{}, raptorVenue:'', edDischarge:'',
+      cprRole:p.cprRole||'', cprRhythm:p.cprRhythm||'', cprOutcome:p.cprOutcome||'',
+      cprAccess:p.cprAccess||'', cprAirway:p.cprAirway||'',
+      cprDefibs:(p.cprDefibs!==''&&p.cprDefibs!=null)?p.cprDefibs:'',
+      imgs:p.imgs||[], created:p.created||0});
+  });
+  saveProcs(); saveTraumas();
+}
+migrateCprToPatients();
 
 /* Meilahden päivystyksessä mahdollisia tilanteita — voi tapahtua missä huoneessa tahansa */
 const PROC_TYPES=[
   {id:'ua_kanyyli',   label:'UÄ perifeerinen kanyyli', short:'UÄ-kanyyli',color:'#5eead4', cannula:true},
   {id:'intubaatio',   label:'Intubaatio',              short:'Intub.',   color:'#fca5a5'},
   {id:'stroke',       label:'STROKE-hälytys',          short:'STROKE',   color:'#a5b4fc'},
-  {id:'elvytys',      label:'Elvytys',                 short:'Elvytys',  color:'#f87171'},
   {id:'stemi',        label:'STEMI / sydänhälytys',    short:'STEMI',    color:'#fdba74'},
   {id:'massiivivuoto',label:'Massiivivuoto',           short:'Massiivi', color:'#fb7185'},
   {id:'sepsis',       label:'Sepsis-hälytys',          short:'Sepsis',   color:'#fcd34d'},
@@ -1134,7 +1152,7 @@ function achievementsHTML(){
   const mStreak=monthStreak(done.concat(traumas).concat(procs));
   const intub=procs.filter(p=>p.type==='intubaatio').length;
   const cans=procs.filter(p=>procTypeById(p.type).cannula).length;
-  const rosc=procs.filter(p=>p.type==='elvytys'&&p.cprOutcome==='ROSC saavutettu').length;
+  const rosc=traumas.filter(t=>t.type==='elvytys'&&t.cprOutcome==='ROSC saavutettu').length;
   const traumaN=traumas.length;
   const alerts=traumas.filter(t=>traumaTypeById(t.type).group==='Trauma').length;
 
@@ -1701,20 +1719,20 @@ function shiftsCSV(){
   return toCSV(rows);
 }
 function patientsCSV(){
-  const rows=[['Päivämäärä','Tyyppi','Ikä/sukupuoli','Vammamekanismi','Vammat','Tylppä/terävä','Jäi henkiin','Jatkohoito','Tarkenteet','Jatko päivystyksestä','Tmp-paikka','Rooli','Lisätiedot']];
+  const rows=[['Päivämäärä','Tyyppi','Ikä/sukupuoli','Vammamekanismi','Vammat','Tylppä/terävä','Jäi henkiin','Jatkohoito','Tarkenteet','Jatko päivystyksestä','Tmp-paikka','Rooli','Elvytysrooli','Alkurytmi','Suoniyhteys','Hengitystie','Defibrillaatiot','Elvytyksen lopputulos','Lisätiedot']];
   traumas.slice().sort((a,b)=>a.date<b.date?-1:1).forEach(t=>{
     const dets=Object.keys(t.dispositionDetail||{}).map(k=>k+': '+t.dispositionDetail[k]).join(' | ');
     rows.push([t.date,traumaTypeById(t.type).label,t.age||'',t.mechanism||'',t.injuries||'',t.traumaKind||'',t.survived||'',
-      (t.disposition||[]).join(' | '),dets,t.edDischarge||'',t.raptorVenue||'',t.role||'',t.notes||'']);
+      (t.disposition||[]).join(' | '),dets,t.edDischarge||'',t.raptorVenue||'',t.role||'',
+      t.cprRole||'',t.cprRhythm||'',t.cprAccess||'',t.cprAirway||'',(t.cprDefibs!==''&&t.cprDefibs!=null)?t.cprDefibs:'',t.cprOutcome||'',t.notes||'']);
   });
   return toCSV(rows);
 }
 function procsCSV(){
-  const rows=[['Päivämäärä','Tyyppi','Huone','Kanyylin lopputulos','STROKE-päätökset','STROKE jatko','Elvytysrooli','Alkurytmi','Suoniyhteys','Hengitystie','Defibrillaatiot','Elvytyksen lopputulos','Lisätiedot']];
+  const rows=[['Päivämäärä','Tyyppi','Huone','Kanyylin lopputulos','STROKE-päätökset','STROKE jatko','Lisätiedot']];
   procs.slice().sort((a,b)=>a.date<b.date?-1:1).forEach(p=>{
     const oc=p.outcome?outcomeById(p.outcome):null;
-    rows.push([p.date,procTypeById(p.type).label,p.room||'',oc?oc.label:'',(p.strokeDecision||[]).join(' | '),p.strokeDest||'',
-      p.cprRole||'',p.cprRhythm||'',p.cprAccess||'',p.cprAirway||'',(p.cprDefibs!==''&&p.cprDefibs!=null)?p.cprDefibs:'',p.cprOutcome||'',p.notes||'']);
+    rows.push([p.date,procTypeById(p.type).label,p.room||'',oc?oc.label:'',(p.strokeDecision||[]).join(' | '),p.strokeDest||'',p.notes||'']);
   });
   return toCSV(rows);
 }
@@ -1757,6 +1775,7 @@ function restoreJSON(obj){
   shifts=obj.shifts.map(migrateShift); saveShifts();
   if(Array.isArray(obj.traumas)){ traumas=obj.traumas; saveTraumas(); migrateTraumaRoles(); }
   if(Array.isArray(obj.procs)){ procs=obj.procs; saveProcs(); migrateCprOutcomes(); }
+  migrateCprToPatients();
   render();
   return obj.shifts.length;
 }
@@ -1829,7 +1848,8 @@ function shiftTraumaBadge(shiftId){
   if(!list.length) return '';
   return '<div style="margin-top:8px; display:flex; flex-wrap:wrap; gap:5px;">'
     + list.map(t=>{ const tt=traumaTypeById(t.type);
-        return `<span class="traumatag" style="background:${tt.color}">${tt.short}${t.age?' · '+esc(t.age):''}</span>`; }).join('')
+        const suff = t.type==='elvytys'&&t.cprOutcome ? ' · '+esc(t.cprOutcome) : (t.age?' · '+esc(t.age):'');
+        return `<span class="traumatag" style="background:${tt.color}">${tt.short}${suff}</span>`; }).join('')
     + '</div>';
 }
 function traumaRowHTML(t){
@@ -1842,6 +1862,13 @@ function traumaRowHTML(t){
       <span class="td">${dl}</span></div>
     ${t.mechanism?`<div class="tmech">${esc(t.mechanism)}</div>`:''}
     ${t.injuries?`<div class="tinj">${esc(t.injuries)}</div>`:''}
+    ${(t.type==='elvytys'&&(t.cprRole||t.cprRhythm||t.cprOutcome||t.cprAccess||t.cprAirway||t.cprDefibs!==''&&t.cprDefibs!=null))?`<div style="margin:3px 0 4px; display:flex; flex-wrap:wrap; gap:4px; align-items:center;">
+      ${t.cprRole?`<span class="ptag">${esc(t.cprRole)}</span>`:''}
+      ${t.cprRhythm?`<span class="ptag">Alkurytmi: ${esc(t.cprRhythm)}</span>`:''}
+      ${t.cprAccess?`<span class="ptag">${esc(t.cprAccess)}</span>`:''}
+      ${t.cprAirway?`<span class="ptag">${t.cprAirway==='Molemmat'?'iGel + intubaatio':esc(t.cprAirway)}</span>`:''}
+      ${(t.cprDefibs!==''&&t.cprDefibs!=null)?`<span class="ptag">Deffa ×${t.cprDefibs}</span>`:''}
+      ${t.cprOutcome?`<span class="traumatag" style="background:${cprOutcomeColor(t.cprOutcome)}">${esc(t.cprOutcome)}</span>`:''}</div>`:''}
     ${(t.traumaKind||t.survived||t.raptorVenue||(t.disposition&&t.disposition.length)||t.edDischarge)?`<div style="margin-top:5px; display:flex; flex-wrap:wrap; gap:4px;">
       ${t.traumaKind?`<span class="ptag">${esc(t.traumaKind)}</span>`:''}
       ${t.survived?`<span class="ptag" style="background:${t.survived==='Kyllä'?'#34d399':'#f87171'}; color:#06122b; border-color:transparent;">${t.survived==='Kyllä'?'Elossa':'Menehtyi'}</span>`:''}
@@ -1874,7 +1901,7 @@ function buildTraumaTypeGrid(){
     const b=document.createElement('button');
     b.className='ttbtn'+(traumaDraft.type===t.id?' sel':'');
     b.innerHTML=`<span class="dot" style="background:${t.color}"></span>${t.label}`;
-    b.onclick=()=>{ traumaDraft.type=t.id; buildTraumaTypeGrid(); buildTraumaExtra(); };
+    b.onclick=()=>{ traumaDraft.type=t.id; buildTraumaTypeGrid(); buildTraumaExtra(); buildTraumaCpr(); };
     g.appendChild(b);
   });
 }
@@ -1925,6 +1952,39 @@ function buildTraumaExtra(){
       edNextColor);
   } else eh.innerHTML='';
 }
+/* Elvytyspotilaan lisäkentät (samat kuin aiemmin toimenpiteissä) */
+function buildTraumaCpr(){
+  const wrap=document.getElementById('tCprWrap');
+  if(traumaDraft.type!=='elvytys'){ wrap.style.display='none'; wrap.innerHTML=''; return; }
+  wrap.style.display='block';
+  wrap.innerHTML='<label class="fl">Rooli elvytysryhmässä</label><div class="chips" id="tCprRole"></div>'
+    +'<label class="fl">Alkurytmi</label><div class="chips" id="tCprRhythm"></div>'
+    +'<label class="fl">Suoniyhteys</label><div class="chips" id="tCprAccess"></div>'
+    +'<label class="fl">Hengitystie</label><div class="chips" id="tCprAirway"></div>'
+    +'<label class="fl">Defibrillaatiot elvytyksen aikana (kpl)</label>'
+    +'<input type="number" id="tCprDefibs" min="0" step="1" inputmode="numeric" placeholder="esim. 3" value="'+(traumaDraft.cprDefibs===''||traumaDraft.cprDefibs==null?'':traumaDraft.cprDefibs)+'">'
+    +'<label class="fl">Lopputulos</label><div class="chips" id="tCprOutcome"></div>';
+  renderChips(document.getElementById('tCprRole'), CPR_ROLES,
+    o=>traumaDraft.cprRole===o,
+    v=>{ traumaDraft.cprRole = traumaDraft.cprRole===v?'':v; buildTraumaCpr(); });
+  renderChips(document.getElementById('tCprRhythm'), CPR_RHYTHMS,
+    o=>traumaDraft.cprRhythm===o,
+    v=>{ traumaDraft.cprRhythm = traumaDraft.cprRhythm===v?'':v; buildTraumaCpr(); });
+  renderChips(document.getElementById('tCprAccess'), CPR_ACCESS,
+    o=>traumaDraft.cprAccess===o,
+    v=>{ traumaDraft.cprAccess = traumaDraft.cprAccess===v?'':v; buildTraumaCpr(); },
+    o=>o==='Oli valmiina'?'#9aa6d4':'#34d399');
+  renderChips(document.getElementById('tCprAirway'), CPR_AIRWAYS,
+    o=>traumaDraft.cprAirway===o,
+    v=>{ traumaDraft.cprAirway = traumaDraft.cprAirway===v?'':v; buildTraumaCpr(); });
+  document.getElementById('tCprDefibs').oninput=e=>{
+    const n=parseInt(e.target.value,10);
+    traumaDraft.cprDefibs = isNaN(n)||n<0 ? '' : n;
+  };
+  renderChips(document.getElementById('tCprOutcome'), CPR_OUTCOMES,
+    o=>traumaDraft.cprOutcome===o,
+    v=>{ traumaDraft.cprOutcome = traumaDraft.cprOutcome===v?'':v; buildTraumaCpr(); }, cprOutcomeColor);
+}
 function buildTraumaRoleChips(){
   const c=document.getElementById('tRoleChips');
   c.innerHTML=PATIENT_ROLES.map(r=>`<button class="chip ${traumaDraft.role===r?'sel':''}" data-role="${r}"
@@ -1951,7 +2011,7 @@ function fillTraumaForm(){
   document.getElementById('tInj').value=traumaDraft.injuries||'';
   document.getElementById('tNotes').value=traumaDraft.notes||'';
   traumaDraft.role=canonRole(traumaDraft.role);
-  buildTraumaTypeGrid(); buildTraumaRoleChips(); buildTraumaExtra(); buildTraumaImgs();
+  buildTraumaTypeGrid(); buildTraumaRoleChips(); buildTraumaExtra(); buildTraumaCpr(); buildTraumaImgs();
 }
 function openTrauma(id, returnTo){
   const src=traumas.find(t=>t.id===id); if(!src) return;
@@ -1964,7 +2024,8 @@ function openTrauma(id, returnTo){
 function openNewTrauma(pre, returnTo){
   editingTraumaId=null; traumaReturnTo=returnTo;
   traumaDraft=Object.assign({id:null, shiftId:null, date:ymd(new Date()), type:'traumahalytys',
-    age:'', mechanism:'', injuries:'', role:'', notes:'', traumaKind:'', survived:'', disposition:[], dispositionDetail:{}, raptorVenue:'', edDischarge:'', imgs:[]}, pre||{});
+    age:'', mechanism:'', injuries:'', role:'', notes:'', traumaKind:'', survived:'', disposition:[], dispositionDetail:{}, raptorVenue:'', edDischarge:'',
+    cprRole:'', cprRhythm:'', cprOutcome:'', cprAccess:'', cprAirway:'', cprDefibs:'', imgs:[]}, pre||{});
   document.getElementById('traumaTitle').textContent='Uusi potilas';
   document.getElementById('deleteTrauma').style.display='none';
   fillTraumaForm(); document.getElementById('traumaSheet').classList.add('open');
@@ -1982,11 +2043,14 @@ document.getElementById('saveTrauma').onclick=()=>{
   traumaDraft.mechanism=document.getElementById('tMech').value.trim();
   traumaDraft.injuries=document.getElementById('tInj').value.trim();
   traumaDraft.notes=document.getElementById('tNotes').value.trim();
-  if(!traumaDraft.mechanism && !traumaDraft.injuries && !traumaDraft.age && !traumaDraft.notes){
+  const hasCpr = traumaDraft.type==='elvytys' &&
+    (traumaDraft.cprRole||traumaDraft.cprRhythm||traumaDraft.cprOutcome||traumaDraft.cprAccess||traumaDraft.cprAirway||(traumaDraft.cprDefibs!==''&&traumaDraft.cprDefibs!=null));
+  if(!traumaDraft.mechanism && !traumaDraft.injuries && !traumaDraft.age && !traumaDraft.notes && !hasCpr){
     alert('Täytä ainakin vammamekanismi, vammat tai ikä.'); return;
   }
   if(!isTraumaGroup(traumaDraft.type)){ traumaDraft.traumaKind=''; traumaDraft.survived=''; traumaDraft.disposition=[]; traumaDraft.dispositionDetail={}; }
   if(!isRaptorType(traumaDraft.type)) traumaDraft.raptorVenue='';
+  if(traumaDraft.type!=='elvytys'){ traumaDraft.cprRole=''; traumaDraft.cprRhythm=''; traumaDraft.cprOutcome=''; traumaDraft.cprAccess=''; traumaDraft.cprAirway=''; traumaDraft.cprDefibs=''; }
   if(!(traumaDraft.disposition||[]).includes('Päivystyksessä')) traumaDraft.edDischarge='';
   if(traumaDraft.dispositionDetail) Object.keys(traumaDraft.dispositionDetail).forEach(k=>{ if(!(traumaDraft.disposition||[]).includes(k)) delete traumaDraft.dispositionDetail[k]; });
   if(!traumaDraft.id){ traumaDraft.id=rid(); traumaDraft.created=Date.now(); }
@@ -2148,13 +2212,13 @@ function traumaMatch(t,q){
   const tt=traumaTypeById(t.type);
   return [tt.label, t.age, t.mechanism, t.injuries, t.notes, t.role, t.traumaKind, t.survived, t.raptorVenue,
     (t.disposition||[]).join(' '), Object.keys(t.dispositionDetail||{}).map(k=>t.dispositionDetail[k]).join(' '),
-    t.edDischarge?(t.edDischarge==='Kotiutui'?'kotiutui päivystyksestä':'päivystyksestä '+t.edDischarge):'', t.date]
+    t.edDischarge?(t.edDischarge==='Kotiutui'?'kotiutui päivystyksestä':'päivystyksestä '+t.edDischarge):'',
+    t.cprRole||'', t.cprRhythm||'', t.cprOutcome||'', t.cprAccess||'', t.cprAirway||'', t.date]
     .join(' ').toLowerCase().includes(q);
 }
 function procMatch(p,q){
   const pt=procTypeById(p.type); const oc=p.outcome?outcomeById(p.outcome):null;
-  return [pt.label, p.room?procRoomById(p.room).label:'', p.notes, (p.strokeDecision||[]).join(' '), p.strokeDest||'', oc?oc.label:'',
-          p.cprRole||'', p.cprRhythm||'', p.cprOutcome||'', p.cprAccess||'', p.cprAirway||'', p.date]
+  return [pt.label, p.room?procRoomById(p.room).label:'', p.notes, (p.strokeDecision||[]).join(' '), p.strokeDest||'', oc?oc.label:'', p.date]
     .join(' ').toLowerCase().includes(q);
 }
 
@@ -2327,6 +2391,68 @@ function renderPatientLog(){
     }
   }
 
+  /* ELVYTYS — rooli, alkurytmi, lopputulos */
+  const cprs=all.filter(t=>t.type==='elvytys');
+  if(cprs.length){
+    const rosc=cprs.filter(p=>p.cprOutcome==='ROSC saavutettu').length;
+    const eloton=cprs.filter(p=>p.cprOutcome==='ROSC ei saavutettu').length;
+    const decided=rosc+eloton;
+    st+='<div class="s-section">Elvytykset</div>';
+    st+='<div class="tilegrid">'
+      + tile(cprs.length,'Elvytystä')
+      + tile(rosc,'ROSC saavutettu')
+      + tile(eloton,'ROSC ei saavutettu')
+      + tile(decided?Math.round(rosc/decided*100)+' %':'–','ROSC-%')
+      + '</div>';
+    // roolit
+    const cprByRole={}; cprs.forEach(p=>{ if(p.cprRole) cprByRole[p.cprRole]=(cprByRole[p.cprRole]||0)+1; });
+    const cprRoleRows=CPR_ROLES.filter(r=>cprByRole[r]).map(r=>({r,n:cprByRole[r]}));
+    if(cprRoleRows.length){
+      const maxRl=Math.max.apply(null,cprRoleRows.map(x=>x.n).concat([1]));
+      st+='<div class="miniL" style="margin:12px 2px 2px;">Oma rooli</div>';
+      cprRoleRows.forEach(x=>{ st+=`<div class="brow"><div class="l1">
+        <span class="nm">${esc(x.r)}</span><span class="mt"><b>${x.n}</b> kpl</span></div>
+        <div class="bar"><i style="width:${Math.max(3,Math.round(x.n/maxRl*100))}%;background:#f87171"></i></div></div>`; });
+    }
+    // alkurytmit
+    const byRhythm={}; cprs.forEach(p=>{ if(p.cprRhythm) byRhythm[p.cprRhythm]=(byRhythm[p.cprRhythm]||0)+1; });
+    const rhythmRows=CPR_RHYTHMS.filter(r=>byRhythm[r]).map(r=>({r,n:byRhythm[r]}));
+    if(rhythmRows.length){
+      const maxRh=Math.max.apply(null,rhythmRows.map(x=>x.n).concat([1]));
+      st+='<div class="miniL" style="margin:12px 2px 2px;">Alkurytmi</div>';
+      rhythmRows.forEach(x=>{ st+=`<div class="brow"><div class="l1">
+        <span class="nm">${esc(x.r)}</span><span class="mt"><b>${x.n}</b> kpl</span></div>
+        <div class="bar"><i style="width:${Math.max(3,Math.round(x.n/maxRh*100))}%;background:#fdba74"></i></div></div>`; });
+    }
+    // suoniyhteys & hengitystie
+    const byAcc={}; cprs.forEach(p=>{ if(p.cprAccess) byAcc[p.cprAccess]=(byAcc[p.cprAccess]||0)+1; });
+    const byAw={}; cprs.forEach(p=>{ if(p.cprAirway) byAw[p.cprAirway]=(byAw[p.cprAirway]||0)+1; });
+    const igelN=(byAw['iGel']||0)+(byAw['Molemmat']||0);
+    const intubN=(byAw['Intubaatio']||0)+(byAw['Molemmat']||0);
+    if(Object.keys(byAcc).length){
+      st+='<div class="miniL" style="margin:12px 2px 2px;">Suoniyhteys</div><div style="margin-top:6px">'
+        + CPR_ACCESS.filter(o=>byAcc[o]).map(o=>`<span class="chipstat">${esc(o)} <b>×${byAcc[o]}</b></span>`).join('')
+        +'</div>';
+    }
+    if(Object.keys(byAw).length){
+      st+='<div class="miniL" style="margin:12px 2px 2px;">Hengitystie</div><div style="margin-top:6px">'
+        +(igelN?`<span class="chipstat">iGel <b>×${igelN}</b></span>`:'')
+        +(intubN?`<span class="chipstat">Intubaatio <b>×${intubN}</b></span>`:'')
+        +(byAw['Molemmat']?`<span class="chipstat">Molemmat <b>×${byAw['Molemmat']}</b></span>`:'')
+        +'</div>';
+    }
+    // defibrillaatiot
+    const defs=cprs.filter(p=>p.cprDefibs!==''&&p.cprDefibs!=null).map(p=>+p.cprDefibs);
+    if(defs.length){
+      const defSum=defs.reduce((a,b)=>a+b,0);
+      st+='<div class="miniL" style="margin:12px 2px 2px;">Defibrillaatiot</div><div class="tilegrid" style="margin-top:6px;">'
+        + tile(defSum,'Yhteensä')
+        + tile(dec1(defSum/defs.length),'Ø / elvytys')
+        + tile(Math.max.apply(null,defs),'Enimmillään')
+        + '</div>';
+    }
+  }
+
   st+='<div class="s-section">Kirjaukset</div>';
   stats.innerHTML=st;
   fillTraumaList(all);
@@ -2339,8 +2465,7 @@ function shiftProcBadge(shiftId){
   if(!list.length) return '';
   return '<div style="margin-top:6px; display:flex; flex-wrap:wrap; gap:5px;">'
     + list.map(p=>{ const pt=procTypeById(p.type);
-        const suff=(p.type==='elvytys'&&p.cprOutcome)?` · ${esc(p.cprOutcome)}`:'';
-        return `<span class="traumatag" style="background:${pt.color}">${pt.short}${suff}</span>`; }).join('')
+        return `<span class="traumatag" style="background:${pt.color}">${pt.short}</span>`; }).join('')
     + '</div>';
 }
 function procRowHTML(p){
@@ -2352,13 +2477,6 @@ function procRowHTML(p){
       ${p.room?`<span class="tage">${esc(procRoomById(p.room).label)}</span>`:''}
       <span class="td">${dl}</span></div>
     ${oc?`<div style="margin:2px 0 4px;"><span class="traumatag" style="background:${oc.color}">${oc.label}</span></div>`:''}
-    ${(p.type==='elvytys'&&(p.cprRole||p.cprRhythm||p.cprOutcome||p.cprAccess||p.cprAirway||p.cprDefibs!==''&&p.cprDefibs!=null))?`<div style="margin:3px 0 4px; display:flex; flex-wrap:wrap; gap:4px; align-items:center;">
-      ${p.cprRole?`<span class="ptag">${esc(p.cprRole)}</span>`:''}
-      ${p.cprRhythm?`<span class="ptag">Alkurytmi: ${esc(p.cprRhythm)}</span>`:''}
-      ${p.cprAccess?`<span class="ptag">${esc(p.cprAccess)}</span>`:''}
-      ${p.cprAirway?`<span class="ptag">${p.cprAirway==='Molemmat'?'iGel + intubaatio':esc(p.cprAirway)}</span>`:''}
-      ${(p.cprDefibs!==''&&p.cprDefibs!=null)?`<span class="ptag">Deffa ×${p.cprDefibs}</span>`:''}
-      ${p.cprOutcome?`<span class="traumatag" style="background:${cprOutcomeColor(p.cprOutcome)}">${esc(p.cprOutcome)}</span>`:''}</div>`:''}
     ${((p.strokeDecision&&p.strokeDecision.length)||p.strokeDest)?`<div style="margin:3px 0 4px; display:flex; flex-wrap:wrap; gap:4px; align-items:center;">
       ${(p.strokeDecision||[]).map(x=>`<span class="ptag">${esc(x)}</span>`).join('')}
       ${p.strokeDest?`<span class="traumatag" style="background:${strokeDestColor(p.strokeDest)}">${esc(p.strokeDest)}</span>`:''}</div>`:''}
@@ -2383,7 +2501,7 @@ function buildProcTypeGrid(){
     b.innerHTML=`<span class="dot" style="background:${p.color}"></span>${p.label}`;
     b.onclick=()=>{ procDraft.type=p.id;
       if(!procTypeById(p.id).cannula) procDraft.outcome=''; else if(!procDraft.outcome) procDraft.outcome='ua_tarvittu';
-      buildProcTypeGrid(); buildProcOutcome(); buildProcStroke(); buildProcCpr(); };
+      buildProcTypeGrid(); buildProcOutcome(); buildProcStroke(); };
     g.appendChild(b);
   });
 }
@@ -2403,38 +2521,6 @@ function buildProcStroke(){
     o=>procDraft.strokeDest===o,
     v=>{ procDraft.strokeDest = procDraft.strokeDest===v?'':v; buildProcStroke(); },
     strokeDestColor);
-}
-function buildProcCpr(){
-  const wrap=document.getElementById('pCprWrap');
-  if(procDraft.type!=='elvytys'){ wrap.style.display='none'; wrap.innerHTML=''; return; }
-  wrap.style.display='block';
-  wrap.innerHTML='<label class="fl">Rooli elvytysryhmässä</label><div class="chips" id="pCprRole"></div>'
-    +'<label class="fl">Alkurytmi</label><div class="chips" id="pCprRhythm"></div>'
-    +'<label class="fl">Suoniyhteys</label><div class="chips" id="pCprAccess"></div>'
-    +'<label class="fl">Hengitystie</label><div class="chips" id="pCprAirway"></div>'
-    +'<label class="fl">Defibrillaatiot elvytyksen aikana (kpl)</label>'
-    +'<input type="number" id="pCprDefibs" min="0" step="1" inputmode="numeric" placeholder="esim. 3" value="'+(procDraft.cprDefibs===''||procDraft.cprDefibs==null?'':procDraft.cprDefibs)+'">'
-    +'<label class="fl">Lopputulos</label><div class="chips" id="pCprOutcome"></div>';
-  renderChips(document.getElementById('pCprRole'), CPR_ROLES,
-    o=>procDraft.cprRole===o,
-    v=>{ procDraft.cprRole = procDraft.cprRole===v?'':v; buildProcCpr(); });
-  renderChips(document.getElementById('pCprRhythm'), CPR_RHYTHMS,
-    o=>procDraft.cprRhythm===o,
-    v=>{ procDraft.cprRhythm = procDraft.cprRhythm===v?'':v; buildProcCpr(); });
-  renderChips(document.getElementById('pCprAccess'), CPR_ACCESS,
-    o=>procDraft.cprAccess===o,
-    v=>{ procDraft.cprAccess = procDraft.cprAccess===v?'':v; buildProcCpr(); },
-    o=>o==='Oli valmiina'?'#9aa6d4':'#34d399');
-  renderChips(document.getElementById('pCprAirway'), CPR_AIRWAYS,
-    o=>procDraft.cprAirway===o,
-    v=>{ procDraft.cprAirway = procDraft.cprAirway===v?'':v; buildProcCpr(); });
-  document.getElementById('pCprDefibs').oninput=e=>{
-    const n=parseInt(e.target.value,10);
-    procDraft.cprDefibs = isNaN(n)||n<0 ? '' : n;
-  };
-  renderChips(document.getElementById('pCprOutcome'), CPR_OUTCOMES,
-    o=>procDraft.cprOutcome===o,
-    v=>{ procDraft.cprOutcome = procDraft.cprOutcome===v?'':v; buildProcCpr(); }, cprOutcomeColor);
 }
 function buildProcOutcome(){
   const wrap=document.getElementById('pOutcomeWrap'), g=document.getElementById('pOutcomeGrid');
@@ -2471,7 +2557,7 @@ document.getElementById('pImgInput').onchange=async e=>{
 function fillProcForm(){
   document.getElementById('pDate').value=procDraft.date;
   document.getElementById('pNotes').value=procDraft.notes||'';
-  buildProcTypeGrid(); buildProcOutcome(); buildProcStroke(); buildProcCpr(); buildProcRoomChips(); buildProcImgs();
+  buildProcTypeGrid(); buildProcOutcome(); buildProcStroke(); buildProcRoomChips(); buildProcImgs();
 }
 function openProc(id, returnTo){
   const src=procs.find(p=>p.id===id); if(!src) return;
@@ -2483,7 +2569,7 @@ function openProc(id, returnTo){
 }
 function openNewProc(pre, returnTo){
   editingProcId=null; procReturnTo=returnTo;
-  procDraft=Object.assign({id:null, shiftId:null, date:ymd(new Date()), type:'ua_kanyyli', room:'H2', outcome:'ua_tarvittu', strokeDecision:[], strokeDest:'', cprRole:'', cprRhythm:'', cprOutcome:'', cprAccess:'', cprAirway:'', cprDefibs:'', notes:'', imgs:[]}, pre||{});
+  procDraft=Object.assign({id:null, shiftId:null, date:ymd(new Date()), type:'ua_kanyyli', room:'H2', outcome:'ua_tarvittu', strokeDecision:[], strokeDest:'', notes:'', imgs:[]}, pre||{});
   document.getElementById('procTitle').textContent='Uusi toimenpide';
   document.getElementById('deleteProc').style.display='none';
   fillProcForm(); document.getElementById('procSheet').classList.add('open');
@@ -2501,7 +2587,6 @@ document.getElementById('saveProc').onclick=()=>{
   if(!procTypeById(procDraft.type).cannula) procDraft.outcome='';
   if(procDraft.type!=='stroke'){ procDraft.strokeDecision=[]; procDraft.strokeDest=''; }
   else procDraft.room=''; /* STROKE:ssä ei huonetta */
-  if(procDraft.type!=='elvytys'){ procDraft.cprRole=''; procDraft.cprRhythm=''; procDraft.cprOutcome=''; procDraft.cprAccess=''; procDraft.cprAirway=''; procDraft.cprDefibs=''; }
   if(!procDraft.id){ procDraft.id=rid(); procDraft.created=Date.now(); }
   const ix=procs.findIndex(p=>p.id===procDraft.id);
   if(ix>=0) procs[ix]=procDraft; else procs.push(procDraft);
@@ -2647,68 +2732,6 @@ function renderProcLog(){
     if(dKeys.length){
       st+='<div class="miniL" style="margin:12px 2px 2px;">Jatko TT-kuvasta</div><div style="margin-top:6px">'
         + dKeys.map(o=>`<span class="chipstat"><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${strokeDestColor(o)}"></span> ${esc(o)} <b>×${dst[o]}</b></span>`).join('')
-        + '</div>';
-    }
-  }
-
-  /* ELVYTYS — rooli, alkurytmi, lopputulos */
-  const cprs=all.filter(p=>p.type==='elvytys');
-  if(cprs.length){
-    const rosc=cprs.filter(p=>p.cprOutcome==='ROSC saavutettu').length;
-    const eloton=cprs.filter(p=>p.cprOutcome==='ROSC ei saavutettu').length;
-    const decided=rosc+eloton;
-    st+='<div class="s-section">Elvytykset</div>';
-    st+='<div class="tilegrid">'
-      + tile(cprs.length,'Elvytystä')
-      + tile(rosc,'ROSC saavutettu')
-      + tile(eloton,'ROSC ei saavutettu')
-      + tile(decided?Math.round(rosc/decided*100)+' %':'–','ROSC-%')
-      + '</div>';
-    // roolit
-    const byRole={}; cprs.forEach(p=>{ if(p.cprRole) byRole[p.cprRole]=(byRole[p.cprRole]||0)+1; });
-    const roleRows=CPR_ROLES.filter(r=>byRole[r]).map(r=>({r,n:byRole[r]}));
-    if(roleRows.length){
-      const maxRl=Math.max.apply(null,roleRows.map(x=>x.n).concat([1]));
-      st+='<div class="miniL" style="margin:12px 2px 2px;">Oma rooli</div>';
-      roleRows.forEach(x=>{ st+=`<div class="brow"><div class="l1">
-        <span class="nm">${esc(x.r)}</span><span class="mt"><b>${x.n}</b> kpl</span></div>
-        <div class="bar"><i style="width:${Math.max(3,Math.round(x.n/maxRl*100))}%;background:#f87171"></i></div></div>`; });
-    }
-    // alkurytmit
-    const byRhythm={}; cprs.forEach(p=>{ if(p.cprRhythm) byRhythm[p.cprRhythm]=(byRhythm[p.cprRhythm]||0)+1; });
-    const rhythmRows=CPR_RHYTHMS.filter(r=>byRhythm[r]).map(r=>({r,n:byRhythm[r]}));
-    if(rhythmRows.length){
-      const maxRh=Math.max.apply(null,rhythmRows.map(x=>x.n).concat([1]));
-      st+='<div class="miniL" style="margin:12px 2px 2px;">Alkurytmi</div>';
-      rhythmRows.forEach(x=>{ st+=`<div class="brow"><div class="l1">
-        <span class="nm">${esc(x.r)}</span><span class="mt"><b>${x.n}</b> kpl</span></div>
-        <div class="bar"><i style="width:${Math.max(3,Math.round(x.n/maxRh*100))}%;background:#fdba74"></i></div></div>`; });
-    }
-    // suoniyhteys & hengitystie
-    const byAcc={}; cprs.forEach(p=>{ if(p.cprAccess) byAcc[p.cprAccess]=(byAcc[p.cprAccess]||0)+1; });
-    const byAw={}; cprs.forEach(p=>{ if(p.cprAirway) byAw[p.cprAirway]=(byAw[p.cprAirway]||0)+1; });
-    const igelN=(byAw['iGel']||0)+(byAw['Molemmat']||0);
-    const intubN=(byAw['Intubaatio']||0)+(byAw['Molemmat']||0);
-    if(Object.keys(byAcc).length){
-      st+='<div class="miniL" style="margin:12px 2px 2px;">Suoniyhteys</div><div style="margin-top:6px">'
-        + CPR_ACCESS.filter(o=>byAcc[o]).map(o=>`<span class="chipstat">${esc(o)} <b>×${byAcc[o]}</b></span>`).join('')
-        +'</div>';
-    }
-    if(Object.keys(byAw).length){
-      st+='<div class="miniL" style="margin:12px 2px 2px;">Hengitystie</div><div style="margin-top:6px">'
-        +(igelN?`<span class="chipstat">iGel <b>×${igelN}</b></span>`:'')
-        +(intubN?`<span class="chipstat">Intubaatio <b>×${intubN}</b></span>`:'')
-        +(byAw['Molemmat']?`<span class="chipstat">Molemmat <b>×${byAw['Molemmat']}</b></span>`:'')
-        +'</div>';
-    }
-    // defibrillaatiot
-    const defs=cprs.filter(p=>p.cprDefibs!==''&&p.cprDefibs!=null).map(p=>+p.cprDefibs);
-    if(defs.length){
-      const defSum=defs.reduce((a,b)=>a+b,0);
-      st+='<div class="miniL" style="margin:12px 2px 2px;">Defibrillaatiot</div><div class="tilegrid" style="margin-top:6px;">'
-        + tile(defSum,'Yhteensä')
-        + tile(dec1(defSum/defs.length),'Ø / elvytys')
-        + tile(Math.max.apply(null,defs),'Enimmillään')
         + '</div>';
     }
   }
