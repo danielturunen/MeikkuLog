@@ -679,12 +679,16 @@ function shiftCat(code){ return SHIFT_CATS.find(c=>c.codes.includes(code)); }
 const SHIFT_FLAGS=[
   {id:'kesken',     label:'Lähdin kesken vuoron',       icon:'⏳', color:'#fbbf24'},
   {id:'sairas',     label:'Sairasloma',                 icon:'🤒', color:'#f87171'},
+  {id:'vuosiloma',  label:'Vuosiloma',                  icon:'🌴', color:'#38bdf8'},
+  {id:'harjoittelu',label:'Työharjoittelu',             icon:'🎓', color:'#c4b5fd'},
   {id:'extra_haly', label:'Ylimääräinen (hälytysraha)', icon:'💰', color:'#34d399'},
   {id:'extra',      label:'Ylimääräinen (ei hälyä)',    icon:'➕', color:'#60a5fa'},
 ];
 function flagById(id){ return SHIFT_FLAGS.find(f=>f.id===id); }
-/* Sairaslomavuoroa ei lasketa tehdyksi työksi */
-function isWorked(s){ return s.flag!=='sairas'; }
+/* Poissaoloja (sairasloma, vuosiloma) ei lasketa tehdyksi työksi.
+   Työharjoittelu on tehtyä työtä ja lasketaan tunteihin. */
+const ABSENCE_FLAGS=['sairas','vuosiloma'];
+function isWorked(s){ return !ABSENCE_FLAGS.includes(s.flag); }
 
 /* ---------- Roolit / sijainnit ---------- */
 const LOCS = [
@@ -1243,6 +1247,8 @@ function periodMetrics(y,m){
     cprs:cprs.length, rosc:cprs.filter(t=>t.cprOutcome==='ROSC saavutettu').length,
     procs:pr.length, cans:cans.length, placed:placed,
     sick:shifts.filter(s=>inP(s.date)&&s.flag==='sairas').length,
+    leave:shifts.filter(s=>inP(s.date)&&s.flag==='vuosiloma').length,
+    training:sh.filter(s=>s.flag==='harjoittelu').length,
     extra:shifts.filter(s=>inP(s.date)&&(s.flag==='extra_haly'||s.flag==='extra')).length,
   };
 }
@@ -1324,11 +1330,14 @@ function summaryStatsHTML(){
     + tileHTML(cur.shifts?Math.round(cur.team/cur.shifts*100)+' %':'–','Tiimivuoro-%')
     + '</div>';
 
-  if(cur.sick||cur.extra){
+  if(cur.sick||cur.leave||cur.training||cur.extra){
     h+='<div class="s-section">Merkinnät</div><div>'
       + (cur.sick?`<span class="chipstat">🤒 Sairaslomavuoroja <b>×${cur.sick}</b></span>`:'')
+      + (cur.leave?`<span class="chipstat">🌴 Vuosilomapäiviä <b>×${cur.leave}</b></span>`:'')
+      + (cur.training?`<span class="chipstat">🎓 Työharjoitteluvuoroja <b>×${cur.training}</b></span>`:'')
       + (cur.extra?`<span class="chipstat">➕ Ylimääräisiä vuoroja <b>×${cur.extra}</b></span>`:'')
-      + '</div>';
+      + '</div>'
+      + ((cur.sick||cur.leave)?'<div class="hint" style="margin-top:4px;">Sairasloma- ja vuosilomapäiviä ei lasketa tunteihin eikä työtilastoihin. Työharjoittelu lasketaan.</div>':'');
   }
 
   const mh=monthlyHoursChart();
@@ -1818,7 +1827,7 @@ function shiftStatsHTML(){
       + SHIFT_FLAGS.filter(f=>flagCnt[f.id]).map(f=>
           `<span class="chipstat"><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${f.color}"></span> ${f.icon} ${esc(f.label)} <b>×${flagCnt[f.id]}</b></span>`).join('')
       + '</div>';
-    if(flagCnt.sairas) h+='<div class="hint" style="margin-top:4px;">Sairaslomavuoroja ei lasketa tunteihin eikä työtilastoihin.</div>';
+    if(flagCnt.sairas||flagCnt.vuosiloma) h+='<div class="hint" style="margin-top:4px;">Sairasloma- ja vuosilomapäiviä ei lasketa tunteihin eikä työtilastoihin.</div>';
   }
 
   /* viikonpäivät */
