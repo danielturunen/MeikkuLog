@@ -231,6 +231,7 @@ try{ var _t=localStorage.getItem('tv_theme'); if(_t) document.documentElement.da
 
   .scopebar{display:flex; gap:8px; margin-bottom:12px;}
   .scope{flex:1; background:var(--card); border:1px solid var(--line); color:var(--muted); border-radius:var(--r2); padding:10px; font-weight:700; font-size:14px;}
+  #statsTabs .scope{padding:9px 4px; font-size:12px;}
   .scope.on{background:var(--accent); border-color:var(--accent); color:#fff;}
   .statrow{display:flex; align-items:center; gap:10px; background:var(--card); border:1px solid var(--line);
     border-radius:var(--r2); padding:11px 12px; margin-bottom:7px;}
@@ -522,7 +523,7 @@ try{ var _t=localStorage.getItem('tv_theme'); if(_t) document.documentElement.da
 <div class="sheet" id="statsSheet">
   <div class="panel">
     <div class="grab"></div>
-    <h2>Roolitilastot</h2>
+    <h2>Tilastot</h2>
     <div class="scopebar">
       <button class="scope on" id="scMonth">Kuukausi</button>
       <button class="scope" id="scYear">Vuosi</button>
@@ -532,6 +533,13 @@ try{ var _t=localStorage.getItem('tv_theme'); if(_t) document.documentElement.da
       <button class="nav" id="stPrevM" aria-label="Edellinen jakso">‹</button>
       <div class="m" id="stPeriodLabel" style="flex:1; text-align:center;"></div>
       <button class="nav" id="stNextM" aria-label="Seuraava jakso">›</button>
+    </div>
+    <div class="scopebar" id="statsTabs" style="margin-bottom:12px;">
+      <button class="scope on" data-tab="summary">Yhteenveto</button>
+      <button class="scope" data-tab="shifts">Vuorot</button>
+      <button class="scope" data-tab="patients">Potilaat</button>
+      <button class="scope" data-tab="procs">Tmp</button>
+      <button class="scope" data-tab="ach">🏆</button>
     </div>
     <div id="statsList"></div>
     <button class="btn ghost" id="closeStats">Sulje</button>
@@ -796,8 +804,11 @@ const TRAUMA_TYPES=[
 function traumaTypeById(id){ return TRAUMA_TYPES.find(t=>t.id===id)||TRAUMA_TYPES[0]; }
 
 /* Erikoisroolit, joiden aikana traumapotilaita yleensä kirjataan.
-   Myös reboa- ja AMB-erikoisliitin kuuluvat traumatiimiin. */
-const TRAUMA_ROLE_SUFFIXES=['TRAU','ane','ane2/knk','reboa','AMB'];
+   reboa kuuluu traumatiimiin (vain Raptor-hälytyksiin, kuten AMBreboa).
+   Pelkkä AMB ei ole traumatiimirooli. */
+const TRAUMA_ROLE_SUFFIXES=['TRAU','ane','ane2/knk','reboa'];
+/* Roolit jotka osallistuvat vain Raptor-hälytyksiin */
+const RAPTOR_ONLY_ROLES=['AMBreboa','Reboa'];
 function shiftHasTraumaRole(s){
   return (s.segments||[]).some(seg=> seg.loc==='AMBreboa' || TRAUMA_ROLE_SUFFIXES.includes(seg.suffix));
 }
@@ -809,22 +820,20 @@ function traumaRolePrefill(s){
   if(seg.suffix==='ane') return 'Ane1';
   if(seg.suffix==='ane2/knk') return 'Ane2';
   if(seg.suffix==='reboa') return 'Reboa';
-  if(seg.suffix==='AMB') return 'AMB';
   return '';
 }
 
 /* Roolit traumakirjauksissa. Mikä tahansa "trauma" = Traumahoitaja. */
-const PATIENT_ROLES=['Traumahoitaja','Ane1','Ane2','AMBreboa','Reboa','AMB'];
-const PATIENT_ROLE_COLORS={Traumahoitaja:'#fca5a5',Ane1:'#fdba74',Ane2:'#fcd34d',AMBreboa:'#f9a8d4',Reboa:'#fb7185',AMB:'#a5b4fc'};
+const PATIENT_ROLES=['Traumahoitaja','Ane1','Ane2','AMBreboa','Reboa'];
+const PATIENT_ROLE_COLORS={Traumahoitaja:'#fca5a5',Ane1:'#fdba74',Ane2:'#fcd34d',AMBreboa:'#f9a8d4',Reboa:'#fb7185'};
 function canonRole(s){
   s=(s||'').toString().trim();
   if(!s) return '';
   if(/trau/i.test(s)) return 'Traumahoitaja';
   if(/ane2/i.test(s)) return 'Ane2';
   if(/ane/i.test(s)) return 'Ane1';
-  if(/ambreboa/i.test(s)) return 'AMBreboa';   /* tarkistetaan ennen reboa/amb */
+  if(/ambreboa/i.test(s)) return 'AMBreboa';   /* tarkistetaan ennen reboaa */
   if(/reboa/i.test(s)) return 'Reboa';
-  if(/amb/i.test(s)) return 'AMB';
   return '';
 }
 /* Normalisoi aiemmin tallennetut arvot (ajetaan myös tuonnin jälkeen) */
@@ -1204,13 +1213,453 @@ function achievementsHTML(){
 /* ---------- Roolitilastot ---------- */
 let statsScope='month', statsYear, statsMonth;
 (function(){ const n=new Date(); statsYear=n.getFullYear(); statsMonth=n.getMonth(); })();
-function renderStats(){
-  document.getElementById('scMonth').classList.toggle('on', statsScope==='month');
-  document.getElementById('scYear').classList.toggle('on', statsScope==='year');
-  document.getElementById('scAll').classList.toggle('on', statsScope==='all');
-  document.getElementById('stMonthNav').style.display = statsScope==='all' ? 'none' : 'flex';
-  document.getElementById('stPeriodLabel').textContent =
-    statsScope==='year' ? String(statsYear) : MONTHS[statsMonth]+' '+statsYear;
+/* ---------- Tilastojakso & yhteenveto ---------- */
+function inStatsPeriod(dateStr){
+  if(statsScope==='all') return true;
+  const d=new Date(dateStr+'T12:00');
+  if(statsScope==='year') return d.getFullYear()===statsYear;
+  return d.getFullYear()===statsYear && d.getMonth()===statsMonth;
+}
+/* Yhden jakson tunnusluvut. y=null => koko historia, m=null => koko vuosi */
+function periodMetrics(y,m){
+  const inP = d => { if(y==null) return true; const x=new Date(d+'T12:00');
+    return x.getFullYear()===y && (m==null || x.getMonth()===m); };
+  const sh=shifts.filter(s=>inP(s.date)&&isWorked(s));
+  const tr=traumas.filter(t=>inP(t.date));
+  const pr=procs.filter(p=>inP(p.date));
+  const cprs=tr.filter(t=>t.type==='elvytys');
+  const alerts=tr.filter(t=>traumaTypeById(t.type).group==='Trauma');
+  const teamShifts=sh.filter(shiftHasTraumaRole);
+  const cans=pr.filter(p=>procTypeById(p.type).cannula);
+  const placed=cans.filter(p=>p.outcome==='ua_tarvittu'||p.outcome==='ilman_ua').length;
+  return {
+    shifts:sh.length,
+    min:sh.reduce((a,s)=>a+shiftMinutes(s),0),
+    nights:sh.filter(s=>{ const t=typeByCode(s.code); return t&&t.overnight; }).length,
+    we:sh.filter(s=>isWeekend(s.date)).length,
+    team:teamShifts.length,
+    teamMin:teamShifts.reduce((a,s)=>a+traumaTeamMinutes(s),0),
+    patients:tr.length, alerts:alerts.length,
+    cprs:cprs.length, rosc:cprs.filter(t=>t.cprOutcome==='ROSC saavutettu').length,
+    procs:pr.length, cans:cans.length, placed:placed,
+    sick:shifts.filter(s=>inP(s.date)&&s.flag==='sairas').length,
+    extra:shifts.filter(s=>inP(s.date)&&(s.flag==='extra_haly'||s.flag==='extra')).length,
+  };
+}
+function statsPrevPeriod(){
+  if(statsScope==='month'){ let y=statsYear,m=statsMonth-1; if(m<0){m=11;y--;} return {y,m,label:MONTHS[m]+' '+y}; }
+  if(statsScope==='year') return {y:statsYear-1,m:null,label:String(statsYear-1)};
+  return null;
+}
+/* Vertailurivi: nykyinen arvo + muutos edelliseen jaksoon */
+function cmpRow(label, cur, prev, fmt){
+  const f=fmt||(v=>String(v));
+  let d='<span class="mt">—</span>';
+  if(prev!=null){
+    const diff=cur-prev;
+    if(diff===0) d='<span class="mt" style="color:var(--muted)">= ennallaan</span>';
+    else{
+      const up=diff>0;
+      d=`<span class="mt" style="color:${up?'var(--accent)':'var(--muted)'}">${up?'▲':'▼'} ${up?'+':'−'}${f(Math.abs(diff))}</span>`;
+    }
+  }
+  const max=Math.max(cur, prev==null?0:prev, 1);
+  return `<div class="brow"><div class="l1">
+      <span class="nm">${esc(label)}</span>
+      <span class="mt"><b>${f(cur)}</b></span> ${d}</div>
+    <div class="bar"><i style="width:${Math.max(3,Math.round(cur/max*100))}%;background:var(--accent)"></i></div>
+    ${prev!=null?`<div class="bar" style="margin-top:4px;"><i style="width:${Math.max(3,Math.round((prev/max)*100))}%;background:var(--muted);opacity:.55"></i></div>`:''}</div>`;
+}
+/* Tunnit kuukausittain — viimeiset 12 kk */
+function monthlyHoursChart(){
+  const byM={};
+  shifts.filter(isWorked).forEach(s=>{ const k=s.date.slice(0,7); byM[k]=(byM[k]||0)+shiftMinutes(s); });
+  const keys=Object.keys(byM).sort().slice(-12);
+  if(keys.length<2) return '';
+  const mx=Math.max.apply(null,keys.map(k=>byM[k]));
+  return '<div class="vchart">'+keys.map(k=>`<div class="vcol"><span class="dv">${Math.round(byM[k]/60)}</span><span class="db" style="height:${Math.round(byM[k]/mx*72)}px"></span><span class="dl">${parseInt(k.slice(5,7))}/${k.slice(2,4)}</span></div>`).join('')+'</div>';
+}
+function summaryStatsHTML(){
+  const y = statsScope==='all' ? null : statsYear;
+  const m = statsScope==='month' ? statsMonth : null;
+  const cur=periodMetrics(y,m);
+  const pv=statsPrevPeriod();
+  const prev=pv?periodMetrics(pv.y,pv.m):null;
+  const P=k=>prev?prev[k]:null;
+  const hh=v=>fmtH(v);
+
+  if(!cur.shifts && !cur.patients && !cur.procs)
+    return '<div class="empty">Ei kirjauksia tällä jaksolla.<br>Vaihda jaksoa nuolista tai valitse “Kaikki”.</div>';
+
+  let h='<div class="tilegrid">'
+    + tileHTML(cur.shifts,'Vuoroa') + tileHTML(fmtH(cur.min),'Tunteja')
+    + tileHTML(cur.shifts?fmtH(cur.min/cur.shifts):'–','Ø vuoro')
+    + '</div><div class="tilegrid" style="margin-top:8px;">'
+    + tileHTML(cur.patients,'Potilasta') + tileHTML(cur.procs,'Toimenpidettä')
+    + tileHTML(cur.shifts?dec2((cur.patients+cur.procs)/cur.shifts):'–','Kirjaus / vuoro')
+    + '</div>';
+
+  h+='<div class="s-section">'+(prev?'Vertailu: '+pv.label:'Jakson luvut')+'</div>';
+  if(prev) h+='<div class="hint" style="margin:0 0 8px;">Ylempi palkki = tämä jakso, alempi = '+esc(pv.label)+'.</div>';
+  h+=cmpRow('Vuoroja', cur.shifts, P('shifts'));
+  h+=cmpRow('Työtunnit', cur.min, P('min'), hh);
+  h+=cmpRow('Yövuoroja', cur.nights, P('nights'));
+  h+=cmpRow('Viikonloppuvuoroja', cur.we, P('we'));
+  h+=cmpRow('Traumatiimivuoroja', cur.team, P('team'));
+  h+=cmpRow('Hätätilapotilaita', cur.patients, P('patients'));
+  h+=cmpRow('Traumahälytyksiä', cur.alerts, P('alerts'));
+  h+=cmpRow('Elvytyksiä', cur.cprs, P('cprs'));
+  h+=cmpRow('Toimenpiteitä', cur.procs, P('procs'));
+  h+=cmpRow('UÄ-kanylointeja', cur.cans, P('cans'));
+
+  /* suhdeluvut, joita on mielekästä verrata kuukausittain */
+  const per=(n,d,dec)=>d? (dec?dec1(n/d):dec2(n/d)) : '–';
+  h+='<div class="s-section">Tehokkuus & altistus</div><div class="tilegrid">'
+    + tileHTML(per(cur.patients,cur.shifts),'Potilas / vuoro')
+    + tileHTML(cur.teamMin?dec1(cur.alerts/(cur.teamMin/60)*100):'–','Häly / 100 tiimi-h')
+    + tileHTML(cur.cprs?Math.round(cur.rosc/cur.cprs*100)+' %':'–','ROSC-%')
+    + '</div><div class="tilegrid" style="margin-top:8px;">'
+    + tileHTML(cur.cans?Math.round(cur.placed/cur.cans*100)+' %':'–','Kanyyli onnistui')
+    + tileHTML(cur.min?dec1(cur.procs/(cur.min/60)*100):'–','Tmp / 100 h')
+    + tileHTML(cur.shifts?Math.round(cur.team/cur.shifts*100)+' %':'–','Tiimivuoro-%')
+    + '</div>';
+
+  if(cur.sick||cur.extra){
+    h+='<div class="s-section">Merkinnät</div><div>'
+      + (cur.sick?`<span class="chipstat">🤒 Sairaslomavuoroja <b>×${cur.sick}</b></span>`:'')
+      + (cur.extra?`<span class="chipstat">➕ Ylimääräisiä vuoroja <b>×${cur.extra}</b></span>`:'')
+      + '</div>';
+  }
+
+  const mh=monthlyHoursChart();
+  if(mh) h+='<div class="s-section">Tunnit kuukausittain (12 kk)</div>'+mh;
+  const mp=monthlyChart(traumas.concat(procs),'#f87171');
+  if(mp) h+='<div class="s-section">Kirjaukset kuukausittain (12 kk)</div>'+mp;
+  return h;
+}
+
+function patientStatsHTML(){
+  const all=traumas.filter(t=>inStatsPeriod(t.date));
+  if(!traumas.length) return '<div class="empty">Ei kirjattuja potilaita.</div>';
+  if(!all.length) return '<div class="empty">Ei potilaita tällä jaksolla.</div>';
+  const tile=tileHTML;
+  const counts={}; all.forEach(t=>counts[t.type]=(counts[t.type]||0)+1);
+  const grp=g=>TRAUMA_TYPES.filter(t=>t.group===g).reduce((a,t)=>a+(counts[t.id]||0),0);
+  const pc=n=>Math.round(n/all.length*100);
+  const alerts=all.filter(t=>traumaTypeById(t.type).group==='Trauma');
+  const taTotal=alerts.length;
+
+  /* yhteenvetolaatat */
+  let st='<div class="tilegrid">'
+    + tile(all.length,'Potilasta')
+    + tile(counts['traumahalytys']||0,'Traumahäly')
+    + tile((counts['raptor_vakaa']||0)+(counts['raptor_instabiili']||0),'Raptor')
+    + tile(grp('Muu hätä'),'Muu hätä')
+    + '</div>';
+
+  if(statsScope==='year') st+=yearReportHTML(traumas,'#f87171',statsYear);
+  st+=motivaatioHTML(traumas,'#f87171');
+  st+='<div class="s-section">Aktiivisuus (6 kk)</div>'+activityHeatmap(traumas,'#f87171');
+
+  /* traumatiimi & altistus (valitulla jaksolla) */
+  const scopedShifts=shifts.filter(s=>inStatsPeriod(s.date));
+  const teamShifts=scopedShifts.filter(shiftHasTraumaRole);
+  const totalMin=scopedShifts.reduce((a,s)=>a+shiftMinutes(s),0);
+  const teamMin=teamShifts.reduce((a,s)=>a+traumaTeamMinutes(s),0);
+  const teamWithAlert=teamShifts.filter(s=>alerts.some(t=>t.shiftId===s.id||(!t.shiftId&&t.date===s.date))).length;
+  st+='<div class="s-section">Traumatiimi & altistus</div>';
+  st+='<div class="tilegrid">'
+    + tile(teamShifts.length,'Tiimivuoroa')
+    + tile(fmtH(teamMin),'Tiimitunnit')
+    + tile(totalMin?Math.round(teamMin/totalMin*100)+' %':'–','Osuus työajasta')
+    + '</div>';
+  st+='<div class="tilegrid" style="margin-top:8px;">'
+    + tile(taTotal,'Traumahäly')
+    + tile(teamShifts.length?dec2(taTotal/teamShifts.length):'–','Ø / tiimivuoro')
+    + tile(teamMin?dec1(taTotal/(teamMin/60)*100):'–','Häly / 100 h')
+    + '</div>';
+  if(teamShifts.length) st+=`<div class="hint" style="margin-top:8px;">${teamWithAlert}/${teamShifts.length} tiimivuorosta (<b>${Math.round(teamWithAlert/teamShifts.length*100)} %</b>) sisälsi vähintään yhden traumahälytyksen.</div>`;
+  else st+='<div class="hint" style="margin-top:8px;">Ei traumatiimivuoroja tällä jaksolla — merkitse vuoroon erikoisrooli (TRAU, ane, ane2/knk tai AMBreboa), niin altistus lasketaan.</div>';
+
+  /* tyypeittäin palkein */
+  const tRows=TRAUMA_TYPES.filter(t=>counts[t.id]).map(t=>Object.assign({},t,{n:counts[t.id]})).sort((a,b)=>b.n-a.n);
+  const maxN=Math.max.apply(null,tRows.map(r=>r.n).concat([1]));
+  st+='<div class="s-section">Tyypeittäin</div>';
+  tRows.forEach(r=>{ st+=`<div class="brow"><div class="l1">
+    <span class="codepill" style="background:${r.color}">${esc(r.short)}</span>
+    <span class="nm">${esc(r.label)}</span>
+    <span class="mt"><b>${r.n}</b> kpl · ${pc(r.n)} %</span></div>
+    <div class="bar"><i style="width:${Math.max(3,Math.round(r.n/maxN*100))}%;background:${r.color}"></i></div></div>`; });
+
+  /* viikonpäivittäin */
+  st+='<div class="s-section">Potilaat viikonpäivittäin</div>'+weekdayChart(all,'#f87171');
+
+  /* roolit */
+  const byRole={}; all.forEach(t=>{ const r=(t.role||'').trim(); if(r) byRole[r]=(byRole[r]||0)+1; });
+  const rkeys=Object.keys(byRole).sort((a,b)=>byRole[b]-byRole[a]);
+  if(rkeys.length){
+    st+='<div class="s-section">Roolit kirjauksissa</div><div>'
+      + rkeys.map(r=>`<span class="chipstat">${esc(r)} <b>×${byRole[r]}</b></span>`).join('')+'</div>';
+  }
+
+  /* kuukausisykli — koko historia */
+  const mcP=monthlyChart(traumas,'#f87171');
+  if(mcP) st+='<div class="s-section">Potilaat kuukausittain (koko historia)</div>'+mcP;
+
+  const allAlerts=traumas.filter(t=>traumaTypeById(t.type).group==='Trauma');
+  const allTeamShifts=shifts.filter(shiftHasTraumaRole);
+  if(allAlerts.length||allTeamShifts.length){
+    const taByM={}, tsByM={};
+    allAlerts.forEach(t=>{ const k=t.date.slice(0,7); taByM[k]=(taByM[k]||0)+1; });
+    allTeamShifts.forEach(s=>{ const k=s.date.slice(0,7); tsByM[k]=(tsByM[k]||0)+1; });
+    const mset={}; Object.keys(taByM).forEach(k=>mset[k]=1); Object.keys(tsByM).forEach(k=>mset[k]=1);
+    const months=Object.keys(mset).sort().reverse().slice(0,12);
+    const maxBoth=Math.max.apply(null, months.map(m=>Math.max(taByM[m]||0,tsByM[m]||0)).concat([1]));
+    st+='<div class="s-section">Kuukausisykli — hälytykset vs. tiimivuorot</div>';
+    months.forEach(m=>{ const ta=taByM[m]||0, ts=tsByM[m]||0; const ml=MONTHS[parseInt(m.slice(5,7))-1]+' '+m.slice(0,4);
+      st+=`<div class="brow"><div class="l1">
+        <span class="nm" style="text-transform:capitalize;">${ml}</span>
+        <span class="mt"><b style="color:#f87171;">${ta}</b> tr · <b style="color:#4f8cff;">${ts}</b> vuoroa</span></div>
+        <div class="bar" style="margin-top:6px;"><i style="width:${Math.max(3,Math.round(ta/maxBoth*100))}%;background:#f87171"></i></div>
+        <div class="bar" style="margin-top:4px;"><i style="width:${Math.max(3,Math.round(ts/maxBoth*100))}%;background:#4f8cff"></i></div></div>`; });
+    st+='<div class="hint" style="margin-top:4px;"><span style="color:#f87171;">■</span> traumahälytykset · <span style="color:#4f8cff;">■</span> traumatiimivuorot</div>';
+  }
+
+  /* tiimivuorot rooleittain (jaksossa) */
+  if(teamShifts.length){
+    const roleCol=PATIENT_ROLE_COLORS;
+    const teamByRole={}; PATIENT_ROLES.forEach(r=>teamByRole[r]=0);
+    teamShifts.forEach(s=>{ const r=traumaRolePrefill(s); if(teamByRole[r]!==undefined) teamByRole[r]++; });
+    const shownRoles=PATIENT_ROLES.filter(r=>teamByRole[r]);
+    const maxRole=Math.max.apply(null, shownRoles.map(r=>teamByRole[r]).concat([1]));
+    st+='<div class="s-section">Traumatiimivuorot rooleittain</div>';
+    shownRoles.forEach(r=>{ const n=teamByRole[r];
+      st+=`<div class="brow"><div class="l1">
+        <span class="codepill" style="background:${roleCol[r]}">${r}</span>
+        <span class="nm"></span>
+        <span class="mt"><b>${n}</b> vuoroa</span></div>
+        <div class="bar"><i style="width:${Math.max(3,Math.round(n/maxRole*100))}%;background:${roleCol[r]}"></i></div></div>`; });
+    st+='<div class="hint" style="margin-top:4px;">Traumatiimiin lasketaan TRAU-, ane-, ane2/knk-, reboa- ja AMB-erikoisroolit sekä AMBreboa-sijoitus.</div>';
+  }
+
+  /* tylppä vs. terävä */
+  const kc={}; alerts.forEach(t=>{ if(t.traumaKind) kc[t.traumaKind]=(kc[t.traumaKind]||0)+1; });
+  if(Object.keys(kc).length){
+    const kk=[['Tylppä','#a5b4fc'],['Terävä','#f87171']];
+    const maxK=Math.max.apply(null, kk.map(x=>kc[x[0]]||0).concat([1]));
+    st+='<div class="s-section">Tylppä vs. terävä</div>';
+    kk.forEach(x=>{ const n=kc[x[0]]||0; st+=`<div class="brow"><div class="l1">
+      <span class="codepill" style="background:${x[1]}">${x[0]}</span><span class="nm"></span>
+      <span class="mt"><b>${n}</b> kpl</span></div>
+      <div class="bar"><i style="width:${Math.max(3,Math.round(n/maxK*100))}%;background:${x[1]}"></i></div></div>`; });
+  }
+
+  /* selviytyminen */
+  const sv={}; alerts.forEach(t=>{ if(t.survived) sv[t.survived]=(sv[t.survived]||0)+1; });
+  const svTot=(sv['Kyllä']||0)+(sv['Ei']||0);
+  if(svTot){
+    st+='<div class="s-section">Selviytyminen</div><div class="tilegrid">'
+      + tile(sv['Kyllä']||0,'Elossa') + tile(sv['Ei']||0,'Menehtyi')
+      + tile(Math.round((sv['Kyllä']||0)/svTot*100)+' %','Eloonjäänti') + '</div>';
+  }
+
+  /* jatkohoito */
+  const dp={}; alerts.forEach(t=>(t.disposition||[]).forEach(x=>dp[x]=(dp[x]||0)+1));
+  const dRows=Object.keys(dp).map(x=>({x,n:dp[x]})).sort((a,b)=>b.n-a.n);
+  if(dRows.length){
+    const maxDp=Math.max.apply(null, dRows.map(r=>r.n).concat([1]));
+    st+='<div class="s-section">Jatkohoito</div>';
+    dRows.forEach(r=>{ st+=`<div class="brow"><div class="l1">
+      <span class="nm">${esc(r.x)}</span><span class="mt"><b>${r.n}</b> kpl</span></div>
+      <div class="bar"><i style="width:${Math.max(3,Math.round(r.n/maxDp*100))}%;background:#4f8cff"></i></div></div>`; });
+    /* päivystyksessä hoidetut: minne matka jatkui */
+    const edN={}; alerts.forEach(t=>{ if(t.edDischarge) edN[t.edDischarge]=(edN[t.edDischarge]||0)+1; });
+    const edKeys=ED_NEXT.filter(o=>edN[o]);
+    if(edKeys.length){
+      st+='<div class="miniL" style="margin:10px 2px 2px;">Jatko päivystyksestä</div><div style="margin-top:6px">'
+        + edKeys.map(o=>`<span class="chipstat"><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${edNextColor(o)}"></span> ${esc(o)} <b>×${edN[o]}</b></span>`).join('')
+        + '</div>';
+    }
+  }
+
+  /* ELVYTYS — rooli, alkurytmi, lopputulos */
+  const cprs=all.filter(t=>t.type==='elvytys');
+  if(cprs.length){
+    const rosc=cprs.filter(p=>p.cprOutcome==='ROSC saavutettu').length;
+    const eloton=cprs.filter(p=>p.cprOutcome==='ROSC ei saavutettu').length;
+    const decided=rosc+eloton;
+    st+='<div class="s-section">Elvytykset</div>';
+    st+='<div class="tilegrid">'
+      + tile(cprs.length,'Elvytystä')
+      + tile(rosc,'ROSC saavutettu')
+      + tile(eloton,'ROSC ei saavutettu')
+      + tile(decided?Math.round(rosc/decided*100)+' %':'–','ROSC-%')
+      + '</div>';
+    // roolit
+    const cprByRole={}; cprs.forEach(p=>{ if(p.cprRole) cprByRole[p.cprRole]=(cprByRole[p.cprRole]||0)+1; });
+    const cprRoleRows=CPR_ROLES.filter(r=>cprByRole[r]).map(r=>({r,n:cprByRole[r]}));
+    if(cprRoleRows.length){
+      const maxRl=Math.max.apply(null,cprRoleRows.map(x=>x.n).concat([1]));
+      st+='<div class="miniL" style="margin:12px 2px 2px;">Oma rooli</div>';
+      cprRoleRows.forEach(x=>{ st+=`<div class="brow"><div class="l1">
+        <span class="nm">${esc(x.r)}</span><span class="mt"><b>${x.n}</b> kpl</span></div>
+        <div class="bar"><i style="width:${Math.max(3,Math.round(x.n/maxRl*100))}%;background:#f87171"></i></div></div>`; });
+    }
+    // alkurytmit
+    const byRhythm={}; cprs.forEach(p=>{ if(p.cprRhythm) byRhythm[p.cprRhythm]=(byRhythm[p.cprRhythm]||0)+1; });
+    const rhythmRows=CPR_RHYTHMS.filter(r=>byRhythm[r]).map(r=>({r,n:byRhythm[r]}));
+    if(rhythmRows.length){
+      const maxRh=Math.max.apply(null,rhythmRows.map(x=>x.n).concat([1]));
+      st+='<div class="miniL" style="margin:12px 2px 2px;">Alkurytmi</div>';
+      rhythmRows.forEach(x=>{ st+=`<div class="brow"><div class="l1">
+        <span class="nm">${esc(x.r)}</span><span class="mt"><b>${x.n}</b> kpl</span></div>
+        <div class="bar"><i style="width:${Math.max(3,Math.round(x.n/maxRh*100))}%;background:#fdba74"></i></div></div>`; });
+    }
+    // suoniyhteys & hengitystie
+    const byAcc={}; cprs.forEach(p=>{ if(p.cprAccess) byAcc[p.cprAccess]=(byAcc[p.cprAccess]||0)+1; });
+    const byAw={}; cprs.forEach(p=>{ if(p.cprAirway) byAw[p.cprAirway]=(byAw[p.cprAirway]||0)+1; });
+    const igelN=(byAw['iGel']||0)+(byAw['Molemmat']||0);
+    const intubN=(byAw['Intubaatio']||0)+(byAw['Molemmat']||0);
+    if(Object.keys(byAcc).length){
+      st+='<div class="miniL" style="margin:12px 2px 2px;">Suoniyhteys</div><div style="margin-top:6px">'
+        + CPR_ACCESS.filter(o=>byAcc[o]).map(o=>`<span class="chipstat">${esc(o)} <b>×${byAcc[o]}</b></span>`).join('')
+        +'</div>';
+    }
+    if(Object.keys(byAw).length){
+      st+='<div class="miniL" style="margin:12px 2px 2px;">Hengitystie</div><div style="margin-top:6px">'
+        +(igelN?`<span class="chipstat">iGel <b>×${igelN}</b></span>`:'')
+        +(intubN?`<span class="chipstat">Intubaatio <b>×${intubN}</b></span>`:'')
+        +(byAw['Molemmat']?`<span class="chipstat">Molemmat <b>×${byAw['Molemmat']}</b></span>`:'')
+        +'</div>';
+    }
+    // defibrillaatiot
+    const defs=cprs.filter(p=>p.cprDefibs!==''&&p.cprDefibs!=null).map(p=>+p.cprDefibs);
+    if(defs.length){
+      const defSum=defs.reduce((a,b)=>a+b,0);
+      st+='<div class="miniL" style="margin:12px 2px 2px;">Defibrillaatiot</div><div class="tilegrid" style="margin-top:6px;">'
+        + tile(defSum,'Yhteensä')
+        + tile(dec1(defSum/defs.length),'Ø / elvytys')
+        + tile(Math.max.apply(null,defs),'Enimmillään')
+        + '</div>';
+    }
+  }
+
+  return st;
+}
+
+function procStatsHTML(){
+  const all=procs.filter(p=>inStatsPeriod(p.date));
+  if(!procs.length) return '<div class="empty">Ei kirjattuja toimenpiteitä.</div>';
+  if(!all.length) return '<div class="empty">Ei toimenpiteitä tällä jaksolla.</div>';
+  const counts={}; all.forEach(p=>counts[p.type]=(counts[p.type]||0)+1);
+  const tile=tileHTML;
+  const cans=all.filter(p=>procTypeById(p.type).cannula);
+  const oc={}; cans.forEach(p=>oc[p.outcome]=(oc[p.outcome]||0)+1);
+  const placed=(oc['ua_tarvittu']||0)+(oc['ilman_ua']||0);
+
+  let st='<div class="tilegrid">'
+    + tile(all.length,'Toimenpidettä')
+    + tile(counts['intubaatio']||0,'Intubaatio')
+    + tile(counts['stroke']||0,'STROKE')
+    + tile(cans.length,'UÄ-kanyyli')
+    + '</div>';
+
+  if(statsScope==='year') st+=yearReportHTML(procs,'#67e8f9',statsYear);
+  st+=motivaatioHTML(procs,'#67e8f9');
+  st+='<div class="s-section">Aktiivisuus (6 kk)</div>'+activityHeatmap(procs,'#67e8f9');
+
+  /* altistus: toimenpiteet per vuoro */
+  const scopedShifts=shifts.filter(s=>inStatsPeriod(s.date));
+  const procShiftIds={}; all.forEach(p=>{ if(p.shiftId) procShiftIds[p.shiftId]=1; });
+  const procDays={}; all.forEach(p=>{ procDays[p.date]=1; });
+  const tmpVuoroa=Object.keys(procShiftIds).length || Object.keys(procDays).length;
+  st+='<div class="s-section">Altistus</div><div class="tilegrid">'
+    + tile(scopedShifts.length,'Työvuoroa')
+    + tile(tmpVuoroa,'Tmp-vuoroa')
+    + tile(scopedShifts.length?dec2(all.length/scopedShifts.length):'–','Ø / työvuoro')
+    + '</div>';
+
+  /* tyypeittäin */
+  const tRows=PROC_TYPES.filter(p=>counts[p.id]).map(p=>Object.assign({},p,{n:counts[p.id]})).sort((a,b)=>b.n-a.n);
+  const maxN=Math.max.apply(null,tRows.map(r=>r.n).concat([1]));
+  st+='<div class="s-section">Tyypeittäin</div>';
+  tRows.forEach(r=>{ st+=`<div class="brow"><div class="l1">
+    <span class="codepill" style="background:${r.color}">${esc(r.short)}</span>
+    <span class="nm">${esc(r.label)}</span>
+    <span class="mt"><b>${r.n}</b> kpl</span></div>
+    <div class="bar"><i style="width:${Math.max(3,Math.round(r.n/maxN*100))}%;background:${r.color}"></i></div></div>`; });
+
+  /* kuukausittain — koko historia */
+  const mcT=monthlyChart(procs,'#67e8f9');
+  if(mcT) st+='<div class="s-section">Toimenpiteet kuukausittain (koko historia)</div>'+mcT;
+
+  /* viikonpäivittäin */
+  st+='<div class="s-section">Toimenpiteet viikonpäivittäin</div>'+weekdayChart(all,'#67e8f9');
+
+  /* huoneittain */
+  const byRoom={}; all.forEach(p=>{ if(!p.room) return; byRoom[p.room]=(byRoom[p.room]||0)+1; });
+  const roomRows=Object.keys(byRoom).map(r=>({r,n:byRoom[r]})).sort((a,b)=>b.n-a.n);
+  const maxRoom=Math.max.apply(null,roomRows.map(x=>x.n).concat([1]));
+  st+='<div class="s-section">Huoneittain</div>';
+  roomRows.forEach(x=>{ const l=procRoomById(x.r), col=l.color;
+    st+=`<div class="brow"><div class="l1">
+      <span class="codepill" style="background:${col}">${esc(l.label)}</span>
+      <span class="nm"></span>
+      <span class="mt"><b>${x.n}</b> kpl</span></div>
+      <div class="bar"><i style="width:${Math.max(3,Math.round(x.n/maxRoom*100))}%;background:${col}"></i></div></div>`; });
+
+  /* UÄ-perifeeriset kanyylit erikseen */
+  if(cans.length){
+    st+='<div class="s-section">UÄ-perifeeriset kanyylit</div>';
+    st+='<div class="tilegrid">'
+      + tile(cans.length,'Yritystä')
+      + tile(placed,'Onnistui')
+      + tile(placed?Math.round(placed/cans.length*100)+' %':'–','Onnistumis-%')
+      + '</div>';
+    st+='<div style="margin-top:8px;">'+CANNULA_OUTCOMES.filter(o=>oc[o.id]).map(o=>
+      `<span class="chipstat"><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${o.color}"></span> ${o.label} <b>×${oc[o.id]}</b></span>`).join('')+'</div>';
+
+    const canByRoom={};
+    cans.forEach(p=>{ const r=p.room||'?'; if(!canByRoom[r]) canByRoom[r]={n:0,ua:0,fail:0};
+      canByRoom[r].n++; if(p.outcome==='ua_tarvittu') canByRoom[r].ua++; if(p.outcome==='ei_onnistunut') canByRoom[r].fail++; });
+    const canRows=Object.keys(canByRoom).map(r=>Object.assign({r},canByRoom[r])).sort((a,b)=> b.ua-a.ua || b.n-a.n);
+    const maxUa=Math.max.apply(null,canRows.map(x=>x.ua).concat([1]));
+    st+='<div class="miniL" style="margin:12px 2px 2px;">Huoneittain — UÄ tarvittiin</div>';
+    canRows.forEach(x=>{ const l=procRoomById(x.r);
+      st+=`<div class="brow"><div class="l1">
+        <span class="codepill" style="background:${l.color}">${esc(l.label)}</span>
+        <span class="nm"></span>
+        <span class="mt">UÄ <b>${x.ua}</b> / ${x.n} kpl${x.fail?` · ei onnist. ${x.fail}`:''}</span></div>
+        <div class="bar"><i style="width:${Math.max(3,Math.round(x.ua/maxUa*100))}%;background:#34d399"></i></div></div>`; });
+  }
+
+  /* STROKE — hoitopäätökset */
+  const strokes=all.filter(p=>p.type==='stroke');
+  if(strokes.length){
+    const sd={}; strokes.forEach(p=>(p.strokeDecision||[]).forEach(x=>sd[x]=(sd[x]||0)+1));
+    const sRows=Object.keys(sd).map(x=>({x,n:sd[x]})).sort((a,b)=>b.n-a.n);
+    st+='<div class="s-section">STROKE — hoitopäätökset</div>';
+    st+=`<div class="hint" style="margin-top:0;">${strokes.length} STROKE-hälytystä kirjattu.</div>`;
+    if(sRows.length){
+      const maxS=Math.max.apply(null, sRows.map(r=>r.n).concat([1]));
+      sRows.forEach(r=>{ st+=`<div class="brow"><div class="l1">
+        <span class="nm">${esc(r.x)}</span><span class="mt"><b>${r.n}</b> kpl</span></div>
+        <div class="bar"><i style="width:${Math.max(3,Math.round(r.n/maxS*100))}%;background:#a5b4fc"></i></div></div>`; });
+    }
+    /* jatko TT-kuvasta */
+    const dst={}; strokes.forEach(p=>{ if(p.strokeDest) dst[p.strokeDest]=(dst[p.strokeDest]||0)+1; });
+    const dKeys=STROKE_DEST.filter(o=>dst[o]);
+    if(dKeys.length){
+      st+='<div class="miniL" style="margin:12px 2px 2px;">Jatko TT-kuvasta</div><div style="margin-top:6px">'
+        + dKeys.map(o=>`<span class="chipstat"><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${strokeDestColor(o)}"></span> ${esc(o)} <b>×${dst[o]}</b></span>`).join('')
+        + '</div>';
+    }
+  }
+
+  return st;
+}
+
+function shiftStatsHTML(){
   const src0 = statsScope==='month'
     ? shifts.filter(s=>{ const d=new Date(s.date+'T12:00'); return d.getFullYear()===statsYear && d.getMonth()===statsMonth; })
     : statsScope==='year'
@@ -1226,12 +1675,10 @@ function renderStats(){
     const ms=s.segments.filter(marked);
     if(ms.length) src.push(Object.assign({},s,{segments:ms})); else skipped++;
   });
-  const el=document.getElementById('statsList');
   if(!src.length){
-    el.innerHTML='<div class="empty">'+(skipped
+    return '<div class="empty">'+(skipped
       ? skipped+' vuoroa odottaa roolimerkintää — tilastot lasketaan vain roolitetuista vuoroista.'
-      : 'Ei vuoroja.')+'</div>';
-    return;
+      : 'Ei vuoroja tällä jaksolla.')+'</div>';
   }
 
   /* --- kerää --- */
@@ -1393,12 +1840,28 @@ function renderStats(){
         + '</div>';
     }
   }
-  /* saavutukset — aina koko historiasta jaksosta riippumatta */
-  h+=achievementsHTML().html;
-
   if(skipped) h+=`<div class="hint" style="margin-top:14px;">${skipped} roolittamatonta vuoroa jätetty pois tilastoista — merkkaa roolit niin ne lasketaan mukaan.</div>`;
-  el.innerHTML=h;
+  return h;
 }
+/* Tilastonäkymä: jakso + välilehti */
+let statsTab='summary';
+function renderStats(){
+  document.getElementById('scMonth').classList.toggle('on', statsScope==='month');
+  document.getElementById('scYear').classList.toggle('on', statsScope==='year');
+  document.getElementById('scAll').classList.toggle('on', statsScope==='all');
+  document.getElementById('stMonthNav').style.display = statsScope==='all' ? 'none' : 'flex';
+  document.getElementById('stPeriodLabel').textContent =
+    statsScope==='year' ? String(statsYear) : MONTHS[statsMonth]+' '+statsYear;
+  document.querySelectorAll('#statsTabs .scope').forEach(b=>b.classList.toggle('on', b.dataset.tab===statsTab));
+  const el=document.getElementById('statsList');
+  el.innerHTML =
+    statsTab==='shifts'   ? shiftStatsHTML()   :
+    statsTab==='patients' ? patientStatsHTML() :
+    statsTab==='procs'    ? procStatsHTML()    :
+    statsTab==='ach'      ? achievementsHTML().html :
+                            summaryStatsHTML();
+}
+document.querySelectorAll('#statsTabs .scope').forEach(b=>b.onclick=()=>{ statsTab=b.dataset.tab; renderStats(); });
 document.getElementById('stRoles').onclick=()=>{
   statsYear=viewYear; statsMonth=viewMonth;
   renderStats(); document.getElementById('statsSheet').classList.add('open');
@@ -2165,15 +2628,16 @@ function yearMonthlyChart(items, year, color){
   const mx=Math.max.apply(null, c.concat([1]));
   return '<div class="vchart" style="margin-top:8px;">'+c.map((n,i)=>`<div class="vcol"><span class="dv">${n||''}</span><span class="db" style="height:${Math.round(n/mx*72)}px;background:${color}"></span><span class="dl">${i+1}</span></div>`).join('')+'</div>';
 }
-function yearReportHTML(items, color){
-  const cur=items.filter(it=>+it.date.slice(0,4)===logYear).length;
-  const prev=items.filter(it=>+it.date.slice(0,4)===logYear-1).length;
+function yearReportHTML(items, color, year){
+  year = year==null ? logYear : year;
+  const cur=items.filter(it=>+it.date.slice(0,4)===year).length;
+  const prev=items.filter(it=>+it.date.slice(0,4)===year-1).length;
   let dstr;
   if(prev===0) dstr = cur? 'uusi' : '–';
   else { const d=Math.round((cur-prev)/prev*100); dstr=(d>0?'+':'')+d+' %'; }
-  let h='<div class="s-section">Vuosikatsaus '+logYear+'</div><div class="tilegrid">'
-    + tileHTML(cur, String(logYear)) + tileHTML(prev, String(logYear-1)) + tileHTML(dstr, 'Muutos') + '</div>';
-  h+=yearMonthlyChart(items, logYear, color);
+  let h='<div class="s-section">Vuosikatsaus '+year+'</div><div class="tilegrid">'
+    + tileHTML(cur, String(year)) + tileHTML(prev, String(year-1)) + tileHTML(dstr, 'Muutos') + '</div>';
+  h+=yearMonthlyChart(items, year, color);
   return h;
 }
 
@@ -2258,210 +2722,7 @@ function renderPatientLog(){
     list.innerHTML='';
     return;
   }
-  const tile=tileHTML;
-  const counts={}; all.forEach(t=>counts[t.type]=(counts[t.type]||0)+1);
-  const grp=g=>TRAUMA_TYPES.filter(t=>t.group===g).reduce((a,t)=>a+(counts[t.id]||0),0);
-  const pc=n=>Math.round(n/all.length*100);
-  const alerts=all.filter(t=>traumaTypeById(t.type).group==='Trauma');
-  const taTotal=alerts.length;
-
-  /* yhteenvetolaatat */
-  let st='<div class="tilegrid">'
-    + tile(all.length,'Potilasta')
-    + tile(counts['traumahalytys']||0,'Traumahäly')
-    + tile((counts['raptor_vakaa']||0)+(counts['raptor_instabiili']||0),'Raptor')
-    + tile(grp('Muu hätä'),'Muu hätä')
-    + '</div>';
-
-  if(logScope==='year') st+=yearReportHTML(traumas,'#f87171');
-  st+=motivaatioHTML(traumas,'#f87171');
-  st+='<div class="s-section">Aktiivisuus (6 kk)</div>'+activityHeatmap(traumas,'#f87171');
-
-  /* traumatiimi & altistus (valitulla jaksolla) */
-  const scopedShifts=shifts.filter(s=>inLogPeriod(s.date));
-  const teamShifts=scopedShifts.filter(shiftHasTraumaRole);
-  const totalMin=scopedShifts.reduce((a,s)=>a+shiftMinutes(s),0);
-  const teamMin=teamShifts.reduce((a,s)=>a+traumaTeamMinutes(s),0);
-  const teamWithAlert=teamShifts.filter(s=>alerts.some(t=>t.shiftId===s.id||(!t.shiftId&&t.date===s.date))).length;
-  st+='<div class="s-section">Traumatiimi & altistus</div>';
-  st+='<div class="tilegrid">'
-    + tile(teamShifts.length,'Tiimivuoroa')
-    + tile(fmtH(teamMin),'Tiimitunnit')
-    + tile(totalMin?Math.round(teamMin/totalMin*100)+' %':'–','Osuus työajasta')
-    + '</div>';
-  st+='<div class="tilegrid" style="margin-top:8px;">'
-    + tile(taTotal,'Traumahäly')
-    + tile(teamShifts.length?dec2(taTotal/teamShifts.length):'–','Ø / tiimivuoro')
-    + tile(teamMin?dec1(taTotal/(teamMin/60)*100):'–','Häly / 100 h')
-    + '</div>';
-  if(teamShifts.length) st+=`<div class="hint" style="margin-top:8px;">${teamWithAlert}/${teamShifts.length} tiimivuorosta (<b>${Math.round(teamWithAlert/teamShifts.length*100)} %</b>) sisälsi vähintään yhden traumahälytyksen.</div>`;
-  else st+='<div class="hint" style="margin-top:8px;">Ei traumatiimivuoroja tällä jaksolla — merkitse vuoroon erikoisrooli (TRAU, ane, ane2/knk tai AMBreboa), niin altistus lasketaan.</div>';
-
-  /* tyypeittäin palkein */
-  const tRows=TRAUMA_TYPES.filter(t=>counts[t.id]).map(t=>Object.assign({},t,{n:counts[t.id]})).sort((a,b)=>b.n-a.n);
-  const maxN=Math.max.apply(null,tRows.map(r=>r.n).concat([1]));
-  st+='<div class="s-section">Tyypeittäin</div>';
-  tRows.forEach(r=>{ st+=`<div class="brow"><div class="l1">
-    <span class="codepill" style="background:${r.color}">${esc(r.short)}</span>
-    <span class="nm">${esc(r.label)}</span>
-    <span class="mt"><b>${r.n}</b> kpl · ${pc(r.n)} %</span></div>
-    <div class="bar"><i style="width:${Math.max(3,Math.round(r.n/maxN*100))}%;background:${r.color}"></i></div></div>`; });
-
-  /* viikonpäivittäin */
-  st+='<div class="s-section">Potilaat viikonpäivittäin</div>'+weekdayChart(all,'#f87171');
-
-  /* roolit */
-  const byRole={}; all.forEach(t=>{ const r=(t.role||'').trim(); if(r) byRole[r]=(byRole[r]||0)+1; });
-  const rkeys=Object.keys(byRole).sort((a,b)=>byRole[b]-byRole[a]);
-  if(rkeys.length){
-    st+='<div class="s-section">Roolit kirjauksissa</div><div>'
-      + rkeys.map(r=>`<span class="chipstat">${esc(r)} <b>×${byRole[r]}</b></span>`).join('')+'</div>';
-  }
-
-  /* kuukausisykli — koko historia */
-  const mcP=monthlyChart(traumas,'#f87171');
-  if(mcP) st+='<div class="s-section">Potilaat kuukausittain (koko historia)</div>'+mcP;
-
-  const allAlerts=traumas.filter(t=>traumaTypeById(t.type).group==='Trauma');
-  const allTeamShifts=shifts.filter(shiftHasTraumaRole);
-  if(allAlerts.length||allTeamShifts.length){
-    const taByM={}, tsByM={};
-    allAlerts.forEach(t=>{ const k=t.date.slice(0,7); taByM[k]=(taByM[k]||0)+1; });
-    allTeamShifts.forEach(s=>{ const k=s.date.slice(0,7); tsByM[k]=(tsByM[k]||0)+1; });
-    const mset={}; Object.keys(taByM).forEach(k=>mset[k]=1); Object.keys(tsByM).forEach(k=>mset[k]=1);
-    const months=Object.keys(mset).sort().reverse().slice(0,12);
-    const maxBoth=Math.max.apply(null, months.map(m=>Math.max(taByM[m]||0,tsByM[m]||0)).concat([1]));
-    st+='<div class="s-section">Kuukausisykli — hälytykset vs. tiimivuorot</div>';
-    months.forEach(m=>{ const ta=taByM[m]||0, ts=tsByM[m]||0; const ml=MONTHS[parseInt(m.slice(5,7))-1]+' '+m.slice(0,4);
-      st+=`<div class="brow"><div class="l1">
-        <span class="nm" style="text-transform:capitalize;">${ml}</span>
-        <span class="mt"><b style="color:#f87171;">${ta}</b> tr · <b style="color:#4f8cff;">${ts}</b> vuoroa</span></div>
-        <div class="bar" style="margin-top:6px;"><i style="width:${Math.max(3,Math.round(ta/maxBoth*100))}%;background:#f87171"></i></div>
-        <div class="bar" style="margin-top:4px;"><i style="width:${Math.max(3,Math.round(ts/maxBoth*100))}%;background:#4f8cff"></i></div></div>`; });
-    st+='<div class="hint" style="margin-top:4px;"><span style="color:#f87171;">■</span> traumahälytykset · <span style="color:#4f8cff;">■</span> traumatiimivuorot</div>';
-  }
-
-  /* tiimivuorot rooleittain (jaksossa) */
-  if(teamShifts.length){
-    const roleCol=PATIENT_ROLE_COLORS;
-    const teamByRole={}; PATIENT_ROLES.forEach(r=>teamByRole[r]=0);
-    teamShifts.forEach(s=>{ const r=traumaRolePrefill(s); if(teamByRole[r]!==undefined) teamByRole[r]++; });
-    const shownRoles=PATIENT_ROLES.filter(r=>teamByRole[r]);
-    const maxRole=Math.max.apply(null, shownRoles.map(r=>teamByRole[r]).concat([1]));
-    st+='<div class="s-section">Traumatiimivuorot rooleittain</div>';
-    shownRoles.forEach(r=>{ const n=teamByRole[r];
-      st+=`<div class="brow"><div class="l1">
-        <span class="codepill" style="background:${roleCol[r]}">${r}</span>
-        <span class="nm"></span>
-        <span class="mt"><b>${n}</b> vuoroa</span></div>
-        <div class="bar"><i style="width:${Math.max(3,Math.round(n/maxRole*100))}%;background:${roleCol[r]}"></i></div></div>`; });
-    st+='<div class="hint" style="margin-top:4px;">Traumatiimiin lasketaan TRAU-, ane-, ane2/knk-, reboa- ja AMB-erikoisroolit sekä AMBreboa-sijoitus.</div>';
-  }
-
-  /* tylppä vs. terävä */
-  const kc={}; alerts.forEach(t=>{ if(t.traumaKind) kc[t.traumaKind]=(kc[t.traumaKind]||0)+1; });
-  if(Object.keys(kc).length){
-    const kk=[['Tylppä','#a5b4fc'],['Terävä','#f87171']];
-    const maxK=Math.max.apply(null, kk.map(x=>kc[x[0]]||0).concat([1]));
-    st+='<div class="s-section">Tylppä vs. terävä</div>';
-    kk.forEach(x=>{ const n=kc[x[0]]||0; st+=`<div class="brow"><div class="l1">
-      <span class="codepill" style="background:${x[1]}">${x[0]}</span><span class="nm"></span>
-      <span class="mt"><b>${n}</b> kpl</span></div>
-      <div class="bar"><i style="width:${Math.max(3,Math.round(n/maxK*100))}%;background:${x[1]}"></i></div></div>`; });
-  }
-
-  /* selviytyminen */
-  const sv={}; alerts.forEach(t=>{ if(t.survived) sv[t.survived]=(sv[t.survived]||0)+1; });
-  const svTot=(sv['Kyllä']||0)+(sv['Ei']||0);
-  if(svTot){
-    st+='<div class="s-section">Selviytyminen</div><div class="tilegrid">'
-      + tile(sv['Kyllä']||0,'Elossa') + tile(sv['Ei']||0,'Menehtyi')
-      + tile(Math.round((sv['Kyllä']||0)/svTot*100)+' %','Eloonjäänti') + '</div>';
-  }
-
-  /* jatkohoito */
-  const dp={}; alerts.forEach(t=>(t.disposition||[]).forEach(x=>dp[x]=(dp[x]||0)+1));
-  const dRows=Object.keys(dp).map(x=>({x,n:dp[x]})).sort((a,b)=>b.n-a.n);
-  if(dRows.length){
-    const maxDp=Math.max.apply(null, dRows.map(r=>r.n).concat([1]));
-    st+='<div class="s-section">Jatkohoito</div>';
-    dRows.forEach(r=>{ st+=`<div class="brow"><div class="l1">
-      <span class="nm">${esc(r.x)}</span><span class="mt"><b>${r.n}</b> kpl</span></div>
-      <div class="bar"><i style="width:${Math.max(3,Math.round(r.n/maxDp*100))}%;background:#4f8cff"></i></div></div>`; });
-    /* päivystyksessä hoidetut: minne matka jatkui */
-    const edN={}; alerts.forEach(t=>{ if(t.edDischarge) edN[t.edDischarge]=(edN[t.edDischarge]||0)+1; });
-    const edKeys=ED_NEXT.filter(o=>edN[o]);
-    if(edKeys.length){
-      st+='<div class="miniL" style="margin:10px 2px 2px;">Jatko päivystyksestä</div><div style="margin-top:6px">'
-        + edKeys.map(o=>`<span class="chipstat"><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${edNextColor(o)}"></span> ${esc(o)} <b>×${edN[o]}</b></span>`).join('')
-        + '</div>';
-    }
-  }
-
-  /* ELVYTYS — rooli, alkurytmi, lopputulos */
-  const cprs=all.filter(t=>t.type==='elvytys');
-  if(cprs.length){
-    const rosc=cprs.filter(p=>p.cprOutcome==='ROSC saavutettu').length;
-    const eloton=cprs.filter(p=>p.cprOutcome==='ROSC ei saavutettu').length;
-    const decided=rosc+eloton;
-    st+='<div class="s-section">Elvytykset</div>';
-    st+='<div class="tilegrid">'
-      + tile(cprs.length,'Elvytystä')
-      + tile(rosc,'ROSC saavutettu')
-      + tile(eloton,'ROSC ei saavutettu')
-      + tile(decided?Math.round(rosc/decided*100)+' %':'–','ROSC-%')
-      + '</div>';
-    // roolit
-    const cprByRole={}; cprs.forEach(p=>{ if(p.cprRole) cprByRole[p.cprRole]=(cprByRole[p.cprRole]||0)+1; });
-    const cprRoleRows=CPR_ROLES.filter(r=>cprByRole[r]).map(r=>({r,n:cprByRole[r]}));
-    if(cprRoleRows.length){
-      const maxRl=Math.max.apply(null,cprRoleRows.map(x=>x.n).concat([1]));
-      st+='<div class="miniL" style="margin:12px 2px 2px;">Oma rooli</div>';
-      cprRoleRows.forEach(x=>{ st+=`<div class="brow"><div class="l1">
-        <span class="nm">${esc(x.r)}</span><span class="mt"><b>${x.n}</b> kpl</span></div>
-        <div class="bar"><i style="width:${Math.max(3,Math.round(x.n/maxRl*100))}%;background:#f87171"></i></div></div>`; });
-    }
-    // alkurytmit
-    const byRhythm={}; cprs.forEach(p=>{ if(p.cprRhythm) byRhythm[p.cprRhythm]=(byRhythm[p.cprRhythm]||0)+1; });
-    const rhythmRows=CPR_RHYTHMS.filter(r=>byRhythm[r]).map(r=>({r,n:byRhythm[r]}));
-    if(rhythmRows.length){
-      const maxRh=Math.max.apply(null,rhythmRows.map(x=>x.n).concat([1]));
-      st+='<div class="miniL" style="margin:12px 2px 2px;">Alkurytmi</div>';
-      rhythmRows.forEach(x=>{ st+=`<div class="brow"><div class="l1">
-        <span class="nm">${esc(x.r)}</span><span class="mt"><b>${x.n}</b> kpl</span></div>
-        <div class="bar"><i style="width:${Math.max(3,Math.round(x.n/maxRh*100))}%;background:#fdba74"></i></div></div>`; });
-    }
-    // suoniyhteys & hengitystie
-    const byAcc={}; cprs.forEach(p=>{ if(p.cprAccess) byAcc[p.cprAccess]=(byAcc[p.cprAccess]||0)+1; });
-    const byAw={}; cprs.forEach(p=>{ if(p.cprAirway) byAw[p.cprAirway]=(byAw[p.cprAirway]||0)+1; });
-    const igelN=(byAw['iGel']||0)+(byAw['Molemmat']||0);
-    const intubN=(byAw['Intubaatio']||0)+(byAw['Molemmat']||0);
-    if(Object.keys(byAcc).length){
-      st+='<div class="miniL" style="margin:12px 2px 2px;">Suoniyhteys</div><div style="margin-top:6px">'
-        + CPR_ACCESS.filter(o=>byAcc[o]).map(o=>`<span class="chipstat">${esc(o)} <b>×${byAcc[o]}</b></span>`).join('')
-        +'</div>';
-    }
-    if(Object.keys(byAw).length){
-      st+='<div class="miniL" style="margin:12px 2px 2px;">Hengitystie</div><div style="margin-top:6px">'
-        +(igelN?`<span class="chipstat">iGel <b>×${igelN}</b></span>`:'')
-        +(intubN?`<span class="chipstat">Intubaatio <b>×${intubN}</b></span>`:'')
-        +(byAw['Molemmat']?`<span class="chipstat">Molemmat <b>×${byAw['Molemmat']}</b></span>`:'')
-        +'</div>';
-    }
-    // defibrillaatiot
-    const defs=cprs.filter(p=>p.cprDefibs!==''&&p.cprDefibs!=null).map(p=>+p.cprDefibs);
-    if(defs.length){
-      const defSum=defs.reduce((a,b)=>a+b,0);
-      st+='<div class="miniL" style="margin:12px 2px 2px;">Defibrillaatiot</div><div class="tilegrid" style="margin-top:6px;">'
-        + tile(defSum,'Yhteensä')
-        + tile(dec1(defSum/defs.length),'Ø / elvytys')
-        + tile(Math.max.apply(null,defs),'Enimmillään')
-        + '</div>';
-    }
-  }
-
-  st+='<div class="s-section">Kirjaukset</div>';
-  stats.innerHTML=st;
+  stats.innerHTML=`<div class="hint" style="margin-top:0;">${all.length} kirjausta tällä jaksolla. Tilastot löytyvät Σ-laatasta.</div>`;
   fillTraumaList(all);
 }
 /* ---------- Toimenpiteet & hälytykset: kirjaus & tilastot ---------- */
@@ -2638,113 +2899,7 @@ function renderProcLog(){
     list.innerHTML='';
     return;
   }
-  const counts={}; all.forEach(p=>counts[p.type]=(counts[p.type]||0)+1);
-  const tile=tileHTML;
-  const cans=all.filter(p=>procTypeById(p.type).cannula);
-  const oc={}; cans.forEach(p=>oc[p.outcome]=(oc[p.outcome]||0)+1);
-  const placed=(oc['ua_tarvittu']||0)+(oc['ilman_ua']||0);
-
-  let st='<div class="tilegrid">'
-    + tile(all.length,'Toimenpidettä')
-    + tile(counts['intubaatio']||0,'Intubaatio')
-    + tile(counts['stroke']||0,'STROKE')
-    + tile(cans.length,'UÄ-kanyyli')
-    + '</div>';
-
-  if(logScope==='year') st+=yearReportHTML(procs,'#67e8f9');
-  st+=motivaatioHTML(procs,'#67e8f9');
-  st+='<div class="s-section">Aktiivisuus (6 kk)</div>'+activityHeatmap(procs,'#67e8f9');
-
-  /* altistus: toimenpiteet per vuoro */
-  const scopedShifts=shifts.filter(s=>inLogPeriod(s.date));
-  const procShiftIds={}; all.forEach(p=>{ if(p.shiftId) procShiftIds[p.shiftId]=1; });
-  const procDays={}; all.forEach(p=>{ procDays[p.date]=1; });
-  const tmpVuoroa=Object.keys(procShiftIds).length || Object.keys(procDays).length;
-  st+='<div class="s-section">Altistus</div><div class="tilegrid">'
-    + tile(scopedShifts.length,'Työvuoroa')
-    + tile(tmpVuoroa,'Tmp-vuoroa')
-    + tile(scopedShifts.length?dec2(all.length/scopedShifts.length):'–','Ø / työvuoro')
-    + '</div>';
-
-  /* tyypeittäin */
-  const tRows=PROC_TYPES.filter(p=>counts[p.id]).map(p=>Object.assign({},p,{n:counts[p.id]})).sort((a,b)=>b.n-a.n);
-  const maxN=Math.max.apply(null,tRows.map(r=>r.n).concat([1]));
-  st+='<div class="s-section">Tyypeittäin</div>';
-  tRows.forEach(r=>{ st+=`<div class="brow"><div class="l1">
-    <span class="codepill" style="background:${r.color}">${esc(r.short)}</span>
-    <span class="nm">${esc(r.label)}</span>
-    <span class="mt"><b>${r.n}</b> kpl</span></div>
-    <div class="bar"><i style="width:${Math.max(3,Math.round(r.n/maxN*100))}%;background:${r.color}"></i></div></div>`; });
-
-  /* kuukausittain — koko historia */
-  const mcT=monthlyChart(procs,'#67e8f9');
-  if(mcT) st+='<div class="s-section">Toimenpiteet kuukausittain (koko historia)</div>'+mcT;
-
-  /* viikonpäivittäin */
-  st+='<div class="s-section">Toimenpiteet viikonpäivittäin</div>'+weekdayChart(all,'#67e8f9');
-
-  /* huoneittain */
-  const byRoom={}; all.forEach(p=>{ if(!p.room) return; byRoom[p.room]=(byRoom[p.room]||0)+1; });
-  const roomRows=Object.keys(byRoom).map(r=>({r,n:byRoom[r]})).sort((a,b)=>b.n-a.n);
-  const maxRoom=Math.max.apply(null,roomRows.map(x=>x.n).concat([1]));
-  st+='<div class="s-section">Huoneittain</div>';
-  roomRows.forEach(x=>{ const l=procRoomById(x.r), col=l.color;
-    st+=`<div class="brow"><div class="l1">
-      <span class="codepill" style="background:${col}">${esc(l.label)}</span>
-      <span class="nm"></span>
-      <span class="mt"><b>${x.n}</b> kpl</span></div>
-      <div class="bar"><i style="width:${Math.max(3,Math.round(x.n/maxRoom*100))}%;background:${col}"></i></div></div>`; });
-
-  /* UÄ-perifeeriset kanyylit erikseen */
-  if(cans.length){
-    st+='<div class="s-section">UÄ-perifeeriset kanyylit</div>';
-    st+='<div class="tilegrid">'
-      + tile(cans.length,'Yritystä')
-      + tile(placed,'Onnistui')
-      + tile(placed?Math.round(placed/cans.length*100)+' %':'–','Onnistumis-%')
-      + '</div>';
-    st+='<div style="margin-top:8px;">'+CANNULA_OUTCOMES.filter(o=>oc[o.id]).map(o=>
-      `<span class="chipstat"><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${o.color}"></span> ${o.label} <b>×${oc[o.id]}</b></span>`).join('')+'</div>';
-
-    const canByRoom={};
-    cans.forEach(p=>{ const r=p.room||'?'; if(!canByRoom[r]) canByRoom[r]={n:0,ua:0,fail:0};
-      canByRoom[r].n++; if(p.outcome==='ua_tarvittu') canByRoom[r].ua++; if(p.outcome==='ei_onnistunut') canByRoom[r].fail++; });
-    const canRows=Object.keys(canByRoom).map(r=>Object.assign({r},canByRoom[r])).sort((a,b)=> b.ua-a.ua || b.n-a.n);
-    const maxUa=Math.max.apply(null,canRows.map(x=>x.ua).concat([1]));
-    st+='<div class="miniL" style="margin:12px 2px 2px;">Huoneittain — UÄ tarvittiin</div>';
-    canRows.forEach(x=>{ const l=procRoomById(x.r);
-      st+=`<div class="brow"><div class="l1">
-        <span class="codepill" style="background:${l.color}">${esc(l.label)}</span>
-        <span class="nm"></span>
-        <span class="mt">UÄ <b>${x.ua}</b> / ${x.n} kpl${x.fail?` · ei onnist. ${x.fail}`:''}</span></div>
-        <div class="bar"><i style="width:${Math.max(3,Math.round(x.ua/maxUa*100))}%;background:#34d399"></i></div></div>`; });
-  }
-
-  /* STROKE — hoitopäätökset */
-  const strokes=all.filter(p=>p.type==='stroke');
-  if(strokes.length){
-    const sd={}; strokes.forEach(p=>(p.strokeDecision||[]).forEach(x=>sd[x]=(sd[x]||0)+1));
-    const sRows=Object.keys(sd).map(x=>({x,n:sd[x]})).sort((a,b)=>b.n-a.n);
-    st+='<div class="s-section">STROKE — hoitopäätökset</div>';
-    st+=`<div class="hint" style="margin-top:0;">${strokes.length} STROKE-hälytystä kirjattu.</div>`;
-    if(sRows.length){
-      const maxS=Math.max.apply(null, sRows.map(r=>r.n).concat([1]));
-      sRows.forEach(r=>{ st+=`<div class="brow"><div class="l1">
-        <span class="nm">${esc(r.x)}</span><span class="mt"><b>${r.n}</b> kpl</span></div>
-        <div class="bar"><i style="width:${Math.max(3,Math.round(r.n/maxS*100))}%;background:#a5b4fc"></i></div></div>`; });
-    }
-    /* jatko TT-kuvasta */
-    const dst={}; strokes.forEach(p=>{ if(p.strokeDest) dst[p.strokeDest]=(dst[p.strokeDest]||0)+1; });
-    const dKeys=STROKE_DEST.filter(o=>dst[o]);
-    if(dKeys.length){
-      st+='<div class="miniL" style="margin:12px 2px 2px;">Jatko TT-kuvasta</div><div style="margin-top:6px">'
-        + dKeys.map(o=>`<span class="chipstat"><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${strokeDestColor(o)}"></span> ${esc(o)} <b>×${dst[o]}</b></span>`).join('')
-        + '</div>';
-    }
-  }
-
-  st+='<div class="s-section">Kirjaukset</div>';
-  stats.innerHTML=st;
+  stats.innerHTML=`<div class="hint" style="margin-top:0;">${all.length} kirjausta tällä jaksolla. Tilastot löytyvät Σ-laatasta.</div>`;
   fillProcList(all);
 }
 
