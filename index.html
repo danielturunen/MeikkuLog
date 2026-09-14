@@ -17,7 +17,7 @@ try{ var _t=localStorage.getItem('tv_theme'); if(_t) document.documentElement.da
 <style>
   :root{
     --bg:#0b1020; --bg2:#121830; --card:#171f3d; --card2:#1e284a;
-    --line:#2a3666; --text:#eef2ff; --muted:#9aa6d4; --accent:#4f8cff;
+    --line:#2a3666; --text:#eef2ff; --muted:#b8c4e0; --accent:#4f8cff;
     --good:#34d399; --warn:#fbbf24; --danger:#f87171;
     --r:16px; --r2:12px; --r3:10px; --r4:7px; --rp:22px;
     --font:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
@@ -107,42 +107,43 @@ try{ var _t=localStorage.getItem('tv_theme'); if(_t) document.documentElement.da
   body{font-family:var(--font);
     background:var(--bgrad); color:var(--text);
     min-height:100vh; padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
-    -webkit-font-smoothing:antialiased; overscroll-behavior-y:none;}
-  .wrap{max-width:580px; margin:0 auto; padding:14px 14px 120px;}
-  header{display:flex; align-items:center; justify-content:space-between; gap:10px; padding:8px 2px 14px;}
-  header h1{font-size:22px; margin:0; letter-spacing:.3px;}
+    -webkit-font-smoothing:antialiased; overscroll-behavior-y:none; line-height:1.5;}
+  .wrap{max-width:580px; margin:0 auto; padding:14px 14px 140px;}
+  header{display:flex; align-items:center; justify-content:space-between; gap:10px; padding:8px 2px 14px; position:sticky; top:0; background:linear-gradient(180deg,var(--bg),rgba(11,16,32,.95)); z-index:10; backdrop-filter:blur(8px);}
+  header h1{font-size:24px; margin:0; letter-spacing:.3px; font-weight:700;}
   .iconbtn{background:var(--card); border:1px solid var(--line); color:var(--text);
-    width:42px; height:42px; border-radius:var(--r2); font-size:19px; display:grid; place-items:center;
-    transition:background .15s,border-color .15s,transform .15s,box-shadow .15s; cursor:pointer;}
+    width:48px; height:48px; border-radius:var(--r2); font-size:20px; display:grid; place-items:center;
+    transition:background .15s,border-color .15s,transform .15s,box-shadow .15s; cursor:pointer; touch-action:manipulation;}
   .iconbtn:hover{background:var(--card2);}
-  .iconbtn:focus{outline:2px solid var(--accent); outline-offset:2px;}
+  .iconbtn:focus-visible{outline:2px solid var(--accent); outline-offset:2px;}
   .iconbtn:active{transform:scale(.94);}
 
   .monthbar{display:flex; align-items:center; justify-content:space-between; gap:8px;
     background:var(--card); border:1px solid var(--line); border-radius:var(--r); padding:8px; margin-bottom:12px; box-shadow:var(--cardshadow);}
   .monthbar .m{font-weight:700; font-size:16px; text-transform:capitalize;}
   .nav{background:var(--card2); border:1px solid var(--line); color:var(--text);
-    width:38px; height:38px; border-radius:var(--r2); font-size:18px; transition:background .15s,border-color .15s,transform .15s; cursor:pointer;}
+    width:44px; height:44px; border-radius:var(--r2); font-size:18px; transition:background .15s,border-color .15s,transform .15s; cursor:pointer; touch-action:manipulation;}
   .nav:hover{background:var(--line);}
-  .nav:focus{outline:2px solid var(--accent); outline-offset:2px;}
+  .nav:focus-visible{outline:2px solid var(--accent); outline-offset:2px;}
   .nav:active{transform:scale(.94);}
 
   .stats{display:flex; gap:8px; margin-bottom:14px;}
   .stat{flex:1; background:var(--card); border:1px solid var(--line); border-radius:var(--r); padding:10px 12px; box-shadow:var(--cardshadow);
-    transition:background .15s,border-color .15s; cursor:pointer;}
-  .stat .num{font-size:20px; font-weight:800;}
+    transition:background .15s,border-color .15s,transform .15s; cursor:pointer; touch-action:manipulation;}
+  .stat .num{font-size:22px; font-weight:800; letter-spacing:-.3px;}
   .stat .lbl{font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:.5px;}
   .stat.tap{background:var(--card2);}
+  .stat.tap:hover{transform:translateY(-2px);}
   .stat.tap:active{transform:scale(.98);}
 
   .day{margin-bottom:10px;}
-  .daylabel{font-size:12px; color:var(--muted); margin:14px 4px 6px; text-transform:capitalize; font-weight:600;}
+  .daylabel{font-size:13px; color:var(--muted); margin:18px 4px 10px; text-transform:capitalize; font-weight:700; letter-spacing:.4px;}
   .shift{display:flex; gap:12px; align-items:stretch; background:var(--card); border:1px solid var(--line); box-shadow:var(--cardshadow);
     border-radius:var(--r); padding:12px; margin-bottom:8px; position:relative; overflow:hidden;
-    transition:background .15s,border-color .15s,box-shadow .2s; cursor:pointer;}
-  .shift:hover{background:var(--card2);}
+    transition:background .15s,border-color .15s,box-shadow .2s,transform .15s; cursor:pointer;}
+  .shift:hover{background:var(--card2); transform:translateY(-2px); box-shadow:0 4px 12px rgba(0,0,0,.2);}
   .shift:focus-within{border-color:var(--accent);}
-  .shift:active{background:var(--card2);}
+  .shift:active{transform:scale(.98);}
   .shift.past{opacity:.45;}
   .shift.current{border-color:var(--accent); box-shadow:0 0 0 1px var(--accent) inset, var(--cardshadow);}
   .nowtag,.nexttag{display:inline-block; font-size:10px; font-weight:800; letter-spacing:.5px;
@@ -167,15 +168,15 @@ try{ var _t=localStorage.getItem('tv_theme'); if(_t) document.documentElement.da
   .seg .dot{width:10px; height:10px; border-radius:50%; flex:none;}
   .seg .st{color:var(--muted); font-variant-numeric:tabular-nums; min-width:92px;}
   .seg .rc{font-weight:700;}
-  .empty{text-align:center; color:var(--muted); padding:40px 20px; line-height:1.6;}
-  .empty .big{font-size:40px; margin-bottom:8px;}
+  .empty{text-align:center; color:var(--muted); padding:60px 20px; line-height:1.6;}
+  .empty .big{font-size:48px; margin-bottom:12px; opacity:.8;}
 
   .fab{position:fixed; right:max(18px,env(safe-area-inset-right)); bottom:max(22px,env(safe-area-inset-bottom));
     width:62px; height:62px; border-radius:50%; background:var(--accent); color:#fff; border:none;
     font-size:34px; box-shadow:0 8px 24px rgba(79,140,255,.45); display:grid; place-items:center; z-index:20;
-    transition:transform .2s cubic-bezier(.34,1.56,.64,1),box-shadow .2s,background .15s; cursor:pointer;}
-  .fab:hover{box-shadow:0 12px 32px rgba(79,140,255,.55);}
-  .fab:focus{outline:2px solid var(--text); outline-offset:-4px;}
+    transition:transform .2s cubic-bezier(.34,1.56,.64,1),box-shadow .2s,background .15s; cursor:pointer; touch-action:manipulation;}
+  .fab:hover{transform:translateY(-4px); box-shadow:0 12px 32px rgba(79,140,255,.55);}
+  .fab:focus-visible{outline:2px solid var(--text); outline-offset:-4px;}
   .fab:active{transform:scale(.92);}
 
   .sheet{position:fixed; inset:0; background:rgba(4,7,18,.6); backdrop-filter:blur(4px); z-index:30; display:none;
@@ -185,19 +186,22 @@ try{ var _t=localStorage.getItem('tv_theme'); if(_t) document.documentElement.da
     border-radius:var(--rp) var(--rp) 0 0; border:1px solid var(--line); border-bottom:none;
     padding:10px 16px calc(24px + env(safe-area-inset-bottom)); animation:slideUp .3s cubic-bezier(.34,1.56,.64,1);}
   @keyframes slideUp{from{transform:translateY(100%);} to{transform:translateY(0);}}
+  @keyframes slideDown{from{transform:translateY(0);} to{transform:translateY(100%);}}
+  @keyframes fadeOut{from{opacity:1;} to{opacity:0;}}
   @keyframes fade{from{opacity:0;} to{opacity:1;}}
+  @keyframes pulse{0%,100%{box-shadow:0 8px 24px rgba(79,140,255,.45);} 50%{box-shadow:0 8px 32px rgba(79,140,255,.65);}}
   .grab{width:40px; height:5px; border-radius:5px; background:var(--line); margin:6px auto 12px;}
   .panel h2{margin:4px 0 14px; font-size:19px;}
   label.fl{display:block; font-size:12px; color:var(--muted); margin:14px 0 6px; text-transform:uppercase; letter-spacing:.5px;}
   input[type=date],input[type=time],input[type=text],input[type=number],input[type=file]{width:100%; background:var(--card); border:1px solid var(--line);
     color:var(--text); border-radius:var(--r2); padding:13px 12px; font-size:16px; font-family:inherit; min-height:48px;
-    transition:background .15s,border-color .15s,box-shadow .15s;}
-  input[type=date]:focus,input[type=time]:focus,input[type=text]:focus,input[type=number]:focus,input[type=file]:focus{
+    transition:background .15s,border-color .15s,box-shadow .15s; touch-action:manipulation;}
+  input[type=date]:focus-visible,input[type=time]:focus-visible,input[type=text]:focus-visible,input[type=number]:focus-visible,input[type=file]:focus-visible{
     outline:none; border-color:var(--accent); box-shadow:0 0 0 2px rgba(79,140,255,.2);}
   textarea{width:100%; background:var(--card); border:1px solid var(--line); color:var(--text); border-radius:var(--r2);
     padding:12px; font-size:13px; font-family:ui-monospace,Menlo,Consolas,monospace; min-height:130px; resize:vertical;
-    transition:background .15s,border-color .15s,box-shadow .15s;}
-  textarea:focus{outline:none; border-color:var(--accent); box-shadow:0 0 0 2px rgba(79,140,255,.2);}
+    transition:background .15s,border-color .15s,box-shadow .15s; touch-action:manipulation;}
+  textarea:focus-visible{outline:none; border-color:var(--accent); box-shadow:0 0 0 2px rgba(79,140,255,.2);}
 
   .typegrid{display:grid; grid-template-columns:repeat(5,1fr); gap:7px;}
   .typebtn{background:var(--card); border:1px solid var(--line); color:var(--text); border-radius:var(--r2);
@@ -237,16 +241,16 @@ try{ var _t=localStorage.getItem('tv_theme'); if(_t) document.documentElement.da
   .tg:active{transform:scale(.97);}
 
   .btn{display:block; width:100%; border:none; border-radius:var(--r); padding:15px; font-size:16px; font-weight:700; margin-top:10px; font-family:inherit;
-    transition:background .15s,color .15s,border-color .15s,transform .15s; cursor:pointer; min-height:52px;}
+    transition:background .15s,color .15s,border-color .15s,transform .15s; cursor:pointer; min-height:52px; touch-action:manipulation;}
   .btn.primary{background:var(--accent); color:#fff;}
   .btn.primary:hover{opacity:.9;}
-  .btn.primary:focus{outline:2px solid var(--text); outline-offset:2px;}
+  .btn.primary:focus-visible{outline:2px solid var(--text); outline-offset:2px;}
   .btn.ghost{background:var(--card); color:var(--text); border:1px solid var(--line);}
   .btn.ghost:hover{background:var(--card2);}
-  .btn.ghost:focus{outline:2px solid var(--accent); outline-offset:2px;}
+  .btn.ghost:focus-visible{outline:2px solid var(--accent); outline-offset:2px;}
   .btn.danger{background:rgba(248,113,113,.12); color:var(--danger); border:1px solid rgba(248,113,113,.3);}
   .btn.danger:hover{background:rgba(248,113,113,.18);}
-  .btn.danger:focus{outline:2px solid var(--danger); outline-offset:2px;}
+  .btn.danger:focus-visible{outline:2px solid var(--danger); outline-offset:2px;}
   .btn:active{transform:scale(.98);}
   .addseg{background:var(--card2); border:1px dashed var(--line); color:var(--accent); border-radius:var(--r2); padding:12px; width:100%; font-weight:700; font-size:14px;
     transition:background .15s,border-color .15s,color .15s; cursor:pointer;}
@@ -271,8 +275,8 @@ try{ var _t=localStorage.getItem('tv_theme'); if(_t) document.documentElement.da
     transition:background .15s,border-color .15s,color .15s; cursor:pointer;}
   .scope:hover{background:var(--card2);}
   #statsTabs .scope{padding:9px 4px; font-size:12px;}
-  .scope.on{background:var(--accent); border-color:var(--accent); color:#fff;}
-  .scope.on:hover{opacity:.9;}
+  .scope.on{background:var(--accent); border-color:var(--accent); color:#fff; font-weight:800;}
+  .scope.on:hover{opacity:.9; transform:scale(1.02);}
   .statrow{display:flex; align-items:center; gap:10px; background:var(--card); border:1px solid var(--line);
     border-radius:var(--r2); padding:11px 12px; margin-bottom:7px; transition:background .15s,border-color .15s; cursor:pointer;}
   .statrow:hover{background:var(--card2);}
