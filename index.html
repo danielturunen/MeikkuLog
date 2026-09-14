@@ -373,9 +373,11 @@ try{ var _t=localStorage.getItem('tv_theme'); if(_t) document.documentElement.da
   .qfab:active{transform:scale(.92);}
   .qmenu{position:fixed; right:max(18px,env(safe-area-inset-right)); bottom:calc(max(22px,env(safe-area-inset-bottom)) + 134px);
     display:none; flex-direction:column; gap:8px; z-index:21;}
-  .qmenu.open{display:flex; animation:up .18s ease;}
+  .qmenu.open{display:flex; animation:slideUp .2s cubic-bezier(.34,1.56,.64,1);}
   .qmenu button{background:var(--card2); border:1px solid var(--line); color:var(--text); border-radius:var(--r2);
-    padding:12px 16px; font-weight:700; font-size:14px; box-shadow:0 6px 18px rgba(0,0,0,.45); white-space:nowrap; text-align:right;}
+    padding:12px 16px; font-weight:700; font-size:14px; box-shadow:0 6px 18px rgba(0,0,0,.45); white-space:nowrap; text-align:right;
+    transition:background .15s,border-color .15s,transform .15s; cursor:pointer; touch-action:manipulation;}
+  .qmenu button:hover{background:var(--line);}
   .qmenu button:active{transform:scale(.96);}
 
   /* Kuvan suurennos */
@@ -389,10 +391,12 @@ try{ var _t=localStorage.getItem('tv_theme'); if(_t) document.documentElement.da
   .calhead span{font-size:10px; color:var(--muted); text-align:center; text-transform:uppercase; letter-spacing:.4px;}
   .calgrid{display:grid; grid-template-columns:repeat(7,1fr) 34px; gap:4px;}
   .calday{min-height:54px; background:var(--card2); border:1px solid transparent; border-radius:var(--r3);
-    padding:4px 2px 3px; display:flex; flex-direction:column; align-items:center; gap:3px;}
+    padding:4px 2px 3px; display:flex; flex-direction:column; align-items:center; gap:3px;
+    transition:background .15s,border-color .15s,transform .15s; cursor:pointer; touch-action:manipulation;}
+  .calday:hover{background:var(--line);}
   .calday.blank{visibility:hidden;}
   .calday .dn{font-size:10px; color:var(--muted); line-height:1;}
-  .calday.today{border-color:var(--accent);}
+  .calday.today{border-color:var(--accent); background:var(--accent); background-clip:padding-box;}
   .calday.pastd{opacity:.55;}
   .calday .cb{font-size:12px; font-weight:800; color:#06122b; border-radius:var(--r4); padding:1px 6px; line-height:1.4;}
   .calday .cd{display:flex; gap:2px; min-height:5px;}
@@ -403,8 +407,10 @@ try{ var _t=localStorage.getItem('tv_theme'); if(_t) document.documentElement.da
   /* Teemavalitsin */
   .themegrid{display:grid; grid-template-columns:repeat(2,1fr); gap:8px;}
   .themecard{background:var(--card); border:1px solid var(--line); border-radius:var(--r2); padding:10px;
-    text-align:left; color:var(--text); font-family:inherit; display:flex; flex-direction:column; gap:8px;}
-  .themecard.sel{border-color:var(--accent); box-shadow:0 0 0 2px rgba(79,140,255,.35) inset;}
+    text-align:left; color:var(--text); font-family:inherit; display:flex; flex-direction:column; gap:8px;
+    transition:background .15s,border-color .15s,box-shadow .15s; cursor:pointer; touch-action:manipulation;}
+  .themecard:hover{background:var(--card2);}
+  .themecard.sel{border-color:var(--accent); box-shadow:0 0 0 2px rgba(79,140,255,.35) inset; background:var(--accent); background-clip:padding-box; opacity:.9;}
   .themecard:active{transform:scale(.97);}
   .tprev{display:block; height:52px; border-radius:8px; padding:8px; position:relative; overflow:hidden;}
   .tprev i{display:block; height:100%; padding:6px 8px;}
@@ -414,10 +420,18 @@ try{ var _t=localStorage.getItem('tv_theme'); if(_t) document.documentElement.da
   .tdesc{font-size:11px; color:var(--muted); margin-top:2px;}
 
   /* Ahtaat näytöt: 5 ikoninappia */
+  @media (max-width:480px){
+    .wrap{padding:14px 12px 140px;}
+  }
   @media (max-width:420px){
-    header h1{font-size:19px;}
-    .iconbtn{width:38px; height:38px; font-size:17px;}
-    header{gap:8px;}
+    header h1{font-size:18px;}
+    .iconbtn{width:44px; height:44px; font-size:18px;}
+    header{gap:6px;}
+    .stat .num{font-size:18px;}
+  }
+  @media (max-width:375px){
+    header h1{font-size:16px;}
+    .wrap{padding:10px 10px 140px;}
   }
   @media (max-width:355px){
     header h1{display:none;}
@@ -425,14 +439,17 @@ try{ var _t=localStorage.getItem('tv_theme'); if(_t) document.documentElement.da
 
   /* Saavutukset */
   .achgrid{display:grid; grid-template-columns:repeat(3,1fr); gap:8px;}
-  .ach{background:var(--card); border:1px solid var(--line); border-radius:var(--r2); padding:10px 6px 8px; text-align:center; box-shadow:var(--cardshadow);}
+  .ach{background:var(--card); border:1px solid var(--line); border-radius:var(--r2); padding:10px 6px 8px; text-align:center; box-shadow:var(--cardshadow);
+    transition:background .15s,border-color .15s,box-shadow .15s,filter .15s,opacity .15s; cursor:pointer;}
+  .ach:hover{background:var(--card2);}
   .ach .ai{font-size:24px; line-height:1.2;}
   .ach .an{font-size:10px; font-weight:700; margin-top:4px; line-height:1.25;}
   .ach .ap{font-size:9px; color:var(--muted); margin-top:3px; font-variant-numeric:tabular-nums;}
   .ach.on{border-color:var(--accent); box-shadow:0 0 0 1px rgba(79,140,255,.35) inset;}
   .ach.off{opacity:.5; filter:grayscale(.4);}
+  .ach.off:hover{opacity:.65;}
   .ach .abar{height:4px; border-radius:3px; background:var(--card2); overflow:hidden; margin-top:5px;}
-  .ach .abar i{display:block; height:100%; background:var(--accent);}
+  .ach .abar i{display:block; height:100%; background:var(--accent); transition:width .3s ease;}
 </style>
 </head>
 <body>
