@@ -191,7 +191,7 @@ try{ var _t=localStorage.getItem('tv_theme'); if(_t) document.documentElement.da
   @keyframes fade{from{opacity:0;} to{opacity:1;}}
   @keyframes pulse{0%,100%{box-shadow:0 8px 24px rgba(79,140,255,.45);} 50%{box-shadow:0 8px 32px rgba(79,140,255,.65);}}
   .grab{width:40px; height:5px; border-radius:5px; background:var(--line); margin:6px auto 12px;}
-  .panel h2{margin:4px 0 14px; font-size:19px;}
+  .panel h2{margin:4px 0 16px; font-size:20px; font-weight:700; letter-spacing:-.3px;}
   label.fl{display:block; font-size:12px; color:var(--muted); margin:14px 0 6px; text-transform:uppercase; letter-spacing:.5px;}
   input[type=date],input[type=time],input[type=text],input[type=number],input[type=file]{width:100%; background:var(--card); border:1px solid var(--line);
     color:var(--text); border-radius:var(--r2); padding:13px 12px; font-size:16px; font-family:inherit; min-height:48px;
@@ -214,9 +214,12 @@ try{ var _t=localStorage.getItem('tv_theme'); if(_t) document.documentElement.da
   .typebtn:active{transform:scale(.95);}
 
   .seglabel{font-size:12px; color:var(--muted); text-transform:uppercase; letter-spacing:.5px; margin:16px 0 8px;}
-  .segedit{background:var(--card); border:1px solid var(--line); border-radius:var(--r); padding:12px; margin-bottom:10px;}
+  .segedit{background:var(--card); border:1px solid var(--line); border-radius:var(--r); padding:12px; margin-bottom:10px;
+    transition:background .15s,border-color .15s; position:relative;}
+  .segedit:hover{background:var(--card2); border-color:var(--accent);}
+  .segedit:focus-within{border-color:var(--accent);}
   .segedit .top{display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;}
-  .segedit .top .ttl{font-size:12px; color:var(--muted); text-transform:uppercase; letter-spacing:.5px; display:flex; align-items:center; gap:8px;}
+  .segedit .top .ttl{font-size:12px; color:var(--muted); text-transform:uppercase; letter-spacing:.5px; display:flex; align-items:center; gap:8px; font-weight:700;}
   .codepill{font-weight:800; color:#06122b; padding:3px 10px; border-radius:var(--r3); font-size:14px;}
   .delseg{background:none; border:none; color:var(--danger); font-size:13px; font-weight:600; transition:color .15s,opacity .15s; cursor:pointer;}
   .delseg:hover{opacity:.8;}
@@ -257,7 +260,11 @@ try{ var _t=localStorage.getItem('tv_theme'); if(_t) document.documentElement.da
   .addseg:hover{background:var(--card); border-color:var(--accent);}
   .addseg:active{transform:scale(.98);}
   .reloctg{display:block; width:100%; margin-top:10px;}
-  .relocbox{background:var(--card); border:1px solid var(--line); border-radius:var(--r); padding:12px; margin-top:10px;}
+  .relocbox{background:var(--card); border:1px solid var(--line); border-radius:var(--r); padding:12px; margin-top:10px;
+    transition:background .15s,border-color .15s;}
+  .relocbox:has(select:focus-visible),
+  .relocbox:has(input:focus-visible){border-color:var(--accent);}
+  .relocbox:hover{background:var(--card2);}
   .relocrow{display:flex; align-items:center; gap:10px; margin-bottom:10px;}
   .relocrow:last-of-type{margin-bottom:0;}
   .relocrow label{flex:none; width:130px; font-size:13px; color:var(--muted);}
@@ -267,8 +274,8 @@ try{ var _t=localStorage.getItem('tv_theme'); if(_t) document.documentElement.da
   .relocbox input{margin-top:8px;}
   .relocnote{margin-top:8px; font-size:11px; font-weight:800; letter-spacing:.3px; display:inline-flex; align-items:center; gap:6px;}
   .relocnote .arr{opacity:.7;}
-  .hint{font-size:12px; color:var(--muted); line-height:1.6; margin-top:10px;}
-  .hint code{background:var(--card); padding:1px 5px; border-radius:5px; font-size:11px;}
+  .hint{font-size:12px; color:var(--muted); line-height:1.6; margin-top:10px; opacity:.9;}
+  .hint code{background:var(--card); padding:2px 6px; border-radius:5px; font-size:11px; font-weight:600; transition:background .15s;}
 
   .scopebar{display:flex; gap:8px; margin-bottom:12px;}
   .scope{flex:1; background:var(--card); border:1px solid var(--line); color:var(--muted); border-radius:var(--r2); padding:10px; font-weight:700; font-size:14px;
