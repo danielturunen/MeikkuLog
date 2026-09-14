@@ -1,0 +1,7 @@
+# Development tools
+.agents/
+.claude/
+skills-lock.json
+
+# Node modules
+node_modules/
