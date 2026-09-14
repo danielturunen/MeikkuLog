@@ -119,8 +119,10 @@ try{ var _t=localStorage.getItem('tv_theme'); if(_t) document.documentElement.da
   .iconbtn:active{transform:scale(.94);}
 
   .monthbar{display:flex; align-items:center; justify-content:space-between; gap:8px;
-    background:var(--card); border:1px solid var(--line); border-radius:var(--r); padding:8px; margin-bottom:12px; box-shadow:var(--cardshadow);}
-  .monthbar .m{font-weight:700; font-size:16px; text-transform:capitalize;}
+    background:var(--card); border:1px solid var(--line); border-radius:var(--r); padding:8px; margin-bottom:12px; box-shadow:var(--cardshadow);
+    transition:background .15s,border-color .15s;}
+  .monthbar:hover{background:var(--card2);}
+  .monthbar .m{font-weight:700; font-size:16px; text-transform:capitalize; letter-spacing:-.3px;}
   .nav{background:var(--card2); border:1px solid var(--line); color:var(--text);
     width:44px; height:44px; border-radius:var(--r2); font-size:18px; transition:background .15s,border-color .15s,transform .15s; cursor:pointer; touch-action:manipulation;}
   .nav:hover{background:var(--line);}
@@ -153,9 +155,14 @@ try{ var _t=localStorage.getItem('tv_theme'); if(_t) document.documentElement.da
   .todaybtn{width:auto !important; padding:0 12px; font-size:13px; font-weight:700;}
   .backupbanner{display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap;
     background:rgba(251,191,36,.12); border:1px solid rgba(251,191,36,.35); color:var(--text);
-    border-radius:var(--r2); padding:10px 12px; margin-bottom:12px; font-size:13px;}
+    border-radius:var(--r2); padding:10px 12px; margin-bottom:12px; font-size:13px;
+    transition:background .15s,border-color .15s;}
+  .backupbanner:hover{background:rgba(251,191,36,.15);}
   .backupbanner .bb-act{display:flex; gap:8px;}
-  .backupbanner button{border:none; border-radius:var(--r3); padding:8px 12px; font-size:13px; font-weight:700; font-family:inherit;}
+  .backupbanner button{border:none; border-radius:var(--r3); padding:8px 12px; font-size:13px; font-weight:700; font-family:inherit;
+    transition:background .15s,transform .15s; cursor:pointer; touch-action:manipulation;}
+  .backupbanner button:hover{transform:translateY(-1px);}
+  .backupbanner button:active{transform:scale(.96);}
   .backupbanner .bb-now{background:var(--accent); color:#fff;}
   .backupbanner .bb-no{background:var(--card2); color:var(--muted); border:1px solid var(--line);}
   .badge{min-width:46px; border-radius:var(--r2); display:grid; place-items:center; font-weight:800; color:#06122b; padding:6px 4px;}
@@ -344,7 +351,9 @@ try{ var _t=localStorage.getItem('tv_theme'); if(_t) document.documentElement.da
     border:1px solid var(--line); color:var(--text); padding:2px 8px; border-radius:var(--r4);}
   .logmonth{font-size:12px; color:var(--muted); text-transform:capitalize; font-weight:700; margin:16px 4px 8px;}
   .traumahint{background:rgba(248,113,113,.10); border:1px solid rgba(248,113,113,.28); color:var(--text);
-    border-radius:var(--r2); padding:10px 12px; font-size:12px; line-height:1.5; margin-bottom:10px;}
+    border-radius:var(--r2); padding:10px 12px; font-size:12px; line-height:1.5; margin-bottom:10px;
+    transition:background .15s,border-color .15s;}
+  .traumahint:hover{background:rgba(248,113,113,.15);}
 
   /* Aktiivisuus-heatmap */
   .heatwrap{overflow-x:auto; -webkit-overflow-scrolling:touch; background:var(--card); border:1px solid var(--line); border-radius:var(--r2); padding:10px;}
